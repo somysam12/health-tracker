@@ -20,6 +20,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Check DATABASE_URL
+if (!process.env.DATABASE_URL) {
+  console.error('❌ DATABASE_URL environment variable is not set!');
+  console.error('Please add DATABASE_URL in Vercel Settings → Environment Variables');
+  throw new Error('DATABASE_URL is not configured');
+}
+
 // Initialize database connection
 const sql = neon(process.env.DATABASE_URL);
 const db = drizzle(sql, { schema: { userProfiles, healthMetrics, exercises, foods, heartTips } });
