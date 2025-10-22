@@ -11,6 +11,7 @@ A comprehensive health tracking application built with React and Express that en
 - Nutritional food database with health benefits
 - Heart patient tips and guidance
 - Responsive dashboard with data visualization
+- **Multi-user support with IP/Session-based tracking (no login required)**
 
 ## User Preferences
 
@@ -58,15 +59,25 @@ Preferred communication style: Simple, everyday language.
 - `/api/heart-rate-references` - Reference ranges for heart rates
 
 **Data Layer:**
-- Currently using in-memory storage (`MemStorage` class)
+- Dual storage support: In-memory (`MemStorage`) and PostgreSQL (`DatabaseStorage`)
+- Automatic storage selection based on DATABASE_URL environment variable
 - Schema validation using Zod with shared type definitions
-- Drizzle ORM configured for PostgreSQL (prepared for database integration)
+- Drizzle ORM configured for PostgreSQL database operations
 - Database schema defined in `shared/schema.ts` for type safety across client/server
+- **Multi-user data isolation using IP address and session tracking**
 
 **Middleware:**
+- Express session middleware for user identification
 - JSON body parsing with raw body preservation
 - Request/response logging for API routes
 - CORS handling for development environment
+
+**Multi-User Architecture:**
+- **IP-based tracking** for remote users: `ip_<address>` format
+- **Session-based tracking** for localhost/proxy users: `session_<timestamp>_<random>` format
+- Secure session cookies with 1-year expiry
+- Complete data isolation per user/session
+- No authentication required - automatic user identification
 
 **Development Setup:**
 - Vite middleware integration for HMR in development
@@ -75,23 +86,30 @@ Preferred communication style: Simple, everyday language.
 
 ### Data Storage Solutions
 
-**Current Implementation:** In-memory storage for rapid prototyping
-- Profile data (single user profile)
-- Daily health metrics with date tracking
-- Static reference data (exercises, foods, heart tips, heart rate ranges)
-
-**Planned Migration:** PostgreSQL via Neon Database
-- Connection pooling with `@neondatabase/serverless`
-- Drizzle ORM for type-safe database queries
-- Migration system configured in `drizzle.config.ts`
-- Schema location: `shared/schema.ts`
-- Migration output: `./migrations` directory
+**Current Implementation:** Dual storage support
+- **In-Memory Storage (`MemStorage`)**: Used when DATABASE_URL is not set
+  - Profile data per user (IP/session-based Map storage)
+  - Daily health metrics per user with date tracking
+  - Static reference data (exercises, foods, heart tips, heart rate ranges)
+  
+- **PostgreSQL Storage (`DatabaseStorage`)**: Used when DATABASE_URL is configured
+  - Production-ready persistent storage via Neon Database
+  - Connection pooling with `@neondatabase/serverless`
+  - Drizzle ORM for type-safe database queries
+  - Migration system configured in `drizzle.config.ts`
 
 **Schema Design:**
-- User profiles with demographic data
-- Time-series health metrics
-- Reference tables for exercises, foods, and health tips
-- Normalized structure prepared for relational queries
+- **User profiles** with demographic data and unique IP/session identifier (`ip_address` VARCHAR(100))
+- **Time-series health metrics** linked to user profiles via foreign key
+- **Reference tables** for exercises, foods, and health tips (shared across users)
+- **Multi-tenant isolation** via `ip_address` unique constraint on user_profiles
+- Normalized structure for efficient relational queries
+
+**Database Migration:**
+- Schema location: `shared/schema.ts`
+- Migration file for Neon DB: `migration_for_neon.sql`
+- Push command: `npm run db:push`
+- Migration output: `./migrations` directory
 
 ### External Dependencies
 
