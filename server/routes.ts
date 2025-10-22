@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { userProfileSchema, insertHealthMetricsSchema } from "../shared/schema.js";
 
-function getClientIdentifier(req: any): string {
+function getClientIdentifier(req: any, res: any): string {
   // Try to get IP from various sources (Vercel, proxies, etc.)
   let ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
            req.headers['x-real-ip'] ||
@@ -11,39 +11,41 @@ function getClientIdentifier(req: any): string {
            req.socket?.remoteAddress ||
            req.connection?.remoteAddress;
   
-  // Debug logging
-  console.log('IP Detection:', {
-    'x-forwarded-for': req.headers['x-forwarded-for'],
-    'x-real-ip': req.headers['x-real-ip'],
-    'req.ip': req.ip,
-    'detected': ip
-  });
-  
-  // If still no IP or localhost, use session-based identifier
-  if (!ip || ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
-    if (!req.session) {
-      console.warn('Session not available, creating temporary ID');
-      return `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    }
-    if (!req.session.userId) {
-      req.session.userId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    }
-    console.log('Using session ID:', req.session.userId);
-    return req.session.userId;
+  // If we have a real IP (not localhost), use it
+  if (ip && ip !== '::1' && ip !== '127.0.0.1' && ip !== '::ffff:127.0.0.1') {
+    const cleanIp = ip.replace(/^::ffff:/, '').trim();
+    const identifier = `ip_${cleanIp}`;
+    console.log('Using IP identifier:', identifier);
+    return identifier;
   }
   
-  // Clean the IP address (remove IPv6 prefix)
-  const cleanIp = ip.replace(/^::ffff:/, '').trim();
-  const identifier = `ip_${cleanIp}`;
-  console.log('Using IP identifier:', identifier);
-  return identifier;
+  // For localhost or when IP is not available, use persistent cookie
+  const cookieName = 'aism_client_id';
+  let clientId = req.cookies[cookieName];
+  
+  if (!clientId) {
+    // Generate a new persistent client ID
+    clientId = `client_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    // Set cookie that lasts 1 year
+    res.cookie(cookieName, clientId, {
+      maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    });
+    console.log('Created new client ID:', clientId);
+  } else {
+    console.log('Using existing client ID from cookie:', clientId);
+  }
+  
+  return clientId;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Profile endpoints
   app.get("/api/profile", async (req, res) => {
     try {
-      const ipAddress = getClientIdentifier(req);
+      const ipAddress = getClientIdentifier(req, res);
       const profile = await storage.getProfile(ipAddress);
       if (!profile) {
         return res.status(404).json({ message: "Profile not found" });
@@ -57,7 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/profile", async (req, res) => {
     try {
-      const ipAddress = getClientIdentifier(req);
+      const ipAddress = getClientIdentifier(req, res);
       
       // Debug log for production troubleshooting
       console.log("Client IP Address:", ipAddress);
@@ -96,7 +98,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // BMI calculation endpoint
   app.get("/api/bmi", async (req, res) => {
     try {
-      const ipAddress = getClientIdentifier(req);
+      const ipAddress = getClientIdentifier(req, res);
       const profile = await storage.getProfile(ipAddress);
       if (!profile) {
         return res.status(404).json({ message: "Profile not found. Please enter your height and weight." });
@@ -131,7 +133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Health metrics endpoints
   app.get("/api/health-metrics/today", async (req, res) => {
     try {
-      const ipAddress = getClientIdentifier(req);
+      const ipAddress = getClientIdentifier(req, res);
       const metrics = await storage.getTodayMetrics(ipAddress);
       res.json(metrics);
     } catch (error) {
@@ -141,7 +143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/health-metrics/steps", async (req, res) => {
     try {
-      const ipAddress = getClientIdentifier(req);
+      const ipAddress = getClientIdentifier(req, res);
       const { steps } = req.body;
       if (typeof steps !== "number" || steps < 0) {
         return res.status(400).json({ message: "Invalid steps value" });
@@ -155,7 +157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/health-metrics/heart-rate", async (req, res) => {
     try {
-      const ipAddress = getClientIdentifier(req);
+      const ipAddress = getClientIdentifier(req, res);
       const { heartRate } = req.body;
       if (typeof heartRate !== "number" || heartRate < 30 || heartRate > 250) {
         return res.status(400).json({ message: "Invalid heart rate value" });
@@ -169,7 +171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/health-metrics/blood-pressure", async (req, res) => {
     try {
-      const ipAddress = getClientIdentifier(req);
+      const ipAddress = getClientIdentifier(req, res);
       const { systolic, diastolic } = req.body;
       if (
         typeof systolic !== "number" ||
@@ -232,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Walking recommendation endpoint
   app.get("/api/walking-recommendation", async (req, res) => {
     try {
-      const ipAddress = getClientIdentifier(req);
+      const ipAddress = getClientIdentifier(req, res);
       const profile = await storage.getProfile(ipAddress);
       const metrics = await storage.getTodayMetrics(ipAddress);
 

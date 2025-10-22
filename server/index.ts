@@ -1,5 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
-import session from "express-session";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -8,29 +8,13 @@ const app = express();
 // Trust proxy for Vercel/production deployments to get real client IP
 app.set('trust proxy', 1);
 
-declare module 'express-session' {
-  interface SessionData {
-    userId: string;
-  }
-}
-
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown
   }
 }
 
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'health-monitor-secret-key-change-in-production',
-  resave: false,
-  saveUninitialized: true,
-  proxy: true, // Required for Vercel/production behind proxy
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 365 * 24 * 60 * 60 * 1000
-  }
-}));
+app.use(cookieParser());
 
 app.use(express.json({
   verify: (req, _res, buf) => {
