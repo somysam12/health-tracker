@@ -670,4 +670,19 @@ app.use((err, req, res, next) => {
 });
 
 // Export for Vercel serverless functions
-export default app;
+// Vercel needs a request handler function, not the Express app directly
+export default function handler(req, res) {
+  // Set CORS headers explicitly for serverless
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  // Pass to Express app
+  return app(req, res);
+}
