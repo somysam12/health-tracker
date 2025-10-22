@@ -669,9 +669,30 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Export for Vercel serverless functions
-// Vercel needs a request handler function, not the Express app directly
+// Export for Vercel serverless functions with path restoration
 export default function handler(req, res) {
+  // CRITICAL FIX: Restore the original URL path
+  // Vercel rewrites reset req.url, so we restore it from the route params
+  const path = req.query.path;
+  if (path) {
+    req.url = `/api/${Array.isArray(path) ? path.join('/') : path}`;
+  }
+  
+  // Also restore query string
+  const queryIndex = req.url.indexOf('?');
+  if (queryIndex === -1 && Object.keys(req.query).length > 0) {
+    const queryParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(req.query)) {
+      if (key !== 'path') {
+        queryParams.append(key, value);
+      }
+    }
+    const queryString = queryParams.toString();
+    if (queryString) {
+      req.url += '?' + queryString;
+    }
+  }
+  
   // Set CORS headers explicitly for serverless
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
