@@ -1,0 +1,120 @@
+-- QUERY TRUNCATED
+-- =====================================================
+-- NEON DATABASE SETUP SQL
+-- Run this complete script in Neon SQL Editor
+-- =====================================================
+
+-- Drop tables if they exist (for clean setup)
+DROP TABLE IF EXISTS health_metrics CASCADE;
+DROP TABLE IF EXISTS user_profiles CASCADE;
+DROP TABLE IF EXISTS exercises CASCADE;
+DROP TABLE IF EXISTS foods CASCADE;
+DROP TABLE IF EXISTS heart_tips CASCADE;
+
+-- =====================================================
+-- CREATE TABLES
+-- =====================================================
+
+-- User profiles table
+CREATE TABLE user_profiles (
+  id SERIAL PRIMARY KEY,
+  height REAL NOT NULL,
+  weight REAL NOT NULL,
+  age INTEGER NOT NULL,
+  gender VARCHAR(10) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+-- Health metrics table
+CREATE TABLE health_metrics (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES user_profiles(id),
+  steps INTEGER NOT NULL DEFAULT 0,
+  heart_rate INTEGER NOT NULL,
+  systolic_bp INTEGER,
+  diastolic_bp INTEGER,
+  date TIMESTAMP DEFAULT NOW() NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+-- Exercises table
+CREATE TABLE exercises (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  category VARCHAR(50) NOT NULL,
+  description TEXT NOT NULL,
+  benefits TEXT NOT NULL,
+  duration VARCHAR(50) NOT NULL,
+  intensity VARCHAR(20) NOT NULL,
+  heart_health_rating INTEGER NOT NULL,
+  calories_burned INTEGER
+);
+
+-- Foods table
+CREATE TABLE foods (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  category VARCHAR(50) NOT NULL,
+  description TEXT NOT NULL,
+  benefits TEXT NOT NULL,
+  calories INTEGER NOT NULL,
+  nutrients TEXT NOT NULL,
+  heart_healthy INTEGER NOT NULL
+);
+
+-- Heart tips table
+CREATE TABLE heart_tips (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  description TEXT NOT NULL,
+  category VARCHAR(50) NOT NULL,
+  importance VARCHAR(20) NOT NULL
+);
+
+-- =====================================================
+-- INSERT SEED DATA - EXERCISES
+-- =====================================================
+
+INSERT INTO exercises (name, category, description, benefits, duration, intensity, heart_health_rating, calories_burned) VALUES
+('Brisk Walking', 'Cardio', 'Walk at a pace where you can talk but not sing comfortably', '["Improves cardiovascular health", "Strengthens bones and muscles", "Helps control weight", "Reduces stress"]', '30 minutes', 'Moderate', 5, 150),
+('Jogging', 'Cardio', 'Light running at a comfortable, steady pace', '["Strengthens heart", "Improves endurance", "Burns calories", "Boosts mood"]', '20-30 minutes', 'Moderate', 4, 250),
+('Swimming', 'Cardio', 'Full-body workout in water with low impact on joints', '["Works entire body", "Low impact exercise", "Improves lung capacity", "Reduces stress"]', '30-45 minutes', 'Moderate', 5, 400),
+('Cycling', 'Cardio', 'Outdoor or stationary bike riding at moderate pace', '["Strengthens legs", "Improves cardiovascular fitness", "Low impact", "Increases stamina"]', '30-60 minutes', 'Moderate', 5, 300),
+('Yoga', 'Flexibility', 'Gentle stretching and breathing exercises', '["Reduces stress", "Improves flexibility", "Lowers blood pressure", "Enhances balance"]', '20-40 minutes', 'Low', 4, 120),
+('Light Weight Training', 'Strength', 'Resistance exercises with light dumbbells or resistance bands', '["Builds muscle", "Improves bone density", "Boosts metabolism", "Strengthens heart"]', '20-30 minutes', 'Moderate', 4, 180),
+('Tai Chi', 'Flexibility', 'Slow, flowing movements for balance and relaxation', '["Reduces stress", "Improves balance", "Gentle on joints", "Lowers blood pressure"]', '30 minutes', 'Low', 4, 100),
+('Dancing', 'Cardio', 'Rhythmic movement to music for fun and fitness', '["Improves coordination", "Strengthens heart", "Burns calories", "Boosts mood"]', '30-45 minutes', 'Moderate', 4, 200),
+('Stretching', 'Flexibility', 'Gentle muscle stretching exercises', '["Improves flexibility", "Reduces muscle tension", "Prevents injury", "Enhances circulation"]', '10-15 minutes', 'Low', 3, 50),
+('Stair Climbing', 'Cardio', 'Walking up stairs at a comfortable pace', '["Strengthens legs", "Improves cardiovascular health", "Burns calories", "Builds endurance"]', '10-20 minutes', 'Moderate', 4, 200),
+('Elliptical Training', 'Cardio', 'Low-impact cardio workout on elliptical machine', '["Low impact on joints", "Full body workout", "Improves stamina", "Burns calories"]', '20-30 minutes', 'Moderate', 5, 270),
+('Water Aerobics', 'Cardio', 'Aerobic exercises performed in water', '["Low impact", "Strengthens muscles", "Improves flexibility", "Reduces joint stress"]', '30-45 minutes', 'Moderate', 5, 250);
+
+-- =====================================================
+-- INSERT SEED DATA - FOODS
+-- =====================================================
+
+INSERT INTO foods (name, category, description, benefits, calories, nutrients, heart_healthy) VALUES
+('Salmon', 'Protein', 'Fatty fish rich in omega-3 fatty acids', '["Rich in omega-3", "Reduces inflammation", "Lowers blood pressure", "Improves cholesterol"]', 206, '{"protein": "22g", "omega3": "2.3g", "vitaminD": "11mcg"}', 1),
+('Oatmeal', 'Grains', 'Whole grain breakfast cereal high in soluble fiber', '["Lowers cholesterol", "Stabilizes blood sugar", "High in fiber", "Provides sustained energy"]', 150, '{"fiber": "4g", "protein": "6g", "iron": "2mg"}', 1),
+('Blueberries', 'Fruits', 'Antioxidant-rich berries that support heart health', '["High in antioxidants", "Reduces blood pressure", "Improves cholesterol", "Anti-inflammatory"]', 84, '{"fiber": "3.6g", "vitaminC": "14mg", "vitaminK": "29mcg"}', 1),
+('Spinach', 'Vegetables', 'Leafy green vegetable packed with nutrients', '["Rich in vitamins", "High in antioxidants", "Lowers blood pressure", "Reduces inflammation"]', 23, '{"iron": "2.7mg", "vitaminK": "483mcg", "folate": "194mcg"}', 1),
+('Almonds', 'Nuts', 'Heart-healthy nuts rich in healthy fats and vitamin E', '["Lowers cholesterol", "Rich in vitamin E", "Contains healthy fats", "Reduces heart disease risk"]', 164, '{"protein": "6g", "fiber": "3.5g", "vitaminE": "7.3mg"}', 1),
+('Avocado', 'Fruits', 'Creamy fruit high in monounsaturated fats', '["Healthy fats", "Lowers cholesterol", "Rich in potassium", "Reduces inflammation"]', 160, '{"fiber": "7g", "potassium": "485mg", "folate": "81mcg"}', 1),
+('Dark Chocolate', 'Treats', '70%+ cocoa chocolate with powerful antioxidants', '["Rich in antioxidants", "Improves blood flow", "Lowers blood pressure", "Boosts mood"]', 170, '{"fiber": "3g", "iron": "3.3mg", "magnesium": "64mg"}', 1),
+('Walnuts', 'Nuts', 'Omega-3 rich nuts that support heart health', '["High in omega-3", "Reduces inflammation", "Lowers cholesterol", "Improves arterial function"]', 185, '{"omega3": "2.5g", "protein": "4.3g", "fiber": "1.9g"}', 1),
+('Olive Oil', 'Oils', 'Extra virgin olive oil rich in healthy fats', '["Monounsaturated fats", "Anti-inflammatory", "Lowers cholesterol", "Protects heart"]', 119, '{"monounsaturatedFat": "10g", "vitaminE": "2mg", "vitaminK": "8mcg"}', 1),
+('Tomatoes', 'Vegetables', 'Lycopene-rich vegetable that supports heart health', '["High in lycopene", "Antioxidant properties", "Lowers cholesterol", "Reduces blood pressure"]', 18, '{"vitaminC": "14mg", "potassium": "237mg", "lycopene": "2.6mg"}', 1),
+('Broccoli', 'Vegetables', 'Cruciferous vegetable packed with nutrients', '["High in fiber", "Rich in antioxidants", "Anti-inflammatory", "Supports heart health"]', 55, '{"fiber": "2.4g", "vitaminC": "89mg", "vitaminK": "102mcg"}', 1),
+('Green Tea', 'Beverages', 'Antioxidant-rich tea that supports cardiovascular health', '["High in antioxidants", "Improves blood flow", "Lowers cholesterol", "Reduces blood pressure"]', 2, '{"catechins": "100mg", "caffeine": "25mg"}', 1);
+
+-- =====================================================
+-- INSERT SEED DATA - HEART TIPS
+-- =====================================================
+
+INSERT INTO heart_tips (title, description, category, importance) VALUES
+('Monitor Your Blood Pressure Regularly', 'Check your blood pressure at least once a week. Keep a log of your readings and share them with your doctor. Normal blood pressure is typically below 120/80 mmHg.', 'Monitoring', 'High'),
+('Take Medications as Prescribed', 'Never skip or stop taking your heart medications without consulting your doctor. Set daily reminders to take medications at the same time each day.', 'Medication', 'Critical'),
+('Recognize Warning Signs', 'Know the signs of a heart attack: chest pain, shortness of breath, nausea, cold sweats. If you experience these symptoms, call emergency services immediately.', 'Emergency', 'Critical'),
+('Maintain a Heart-Healthy Diet', 'Focus on vegetables, fruits, whole grains, and lean proteins. Limit sodium to less than 2,300mg per day. Avoid trans fats and excessive saturated fats.', 'Diet', 'High'),
+('Stay Physically Active', 'Aim for at least 150 minutes of moder
