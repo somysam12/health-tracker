@@ -6,16 +6,20 @@ import { pgTable, serial, varchar, integer, timestamp, real, text } from "drizzl
 
 const app = express();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Important: Parse JSON and URL-encoded bodies BEFORE routes
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// CORS for Vercel
+// CORS - Allow all origins for Vercel deployment
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
+    return res.status(200).end();
   }
   next();
 });
@@ -88,36 +92,22 @@ function getClientIdentifier(req) {
   return ip.replace(/^::ffff:/, '').trim();
 }
 
-// Health check endpoint
-app.get("/api/health", (req, res) => {
-  const dbUrlExists = !!process.env.DATABASE_URL;
-  const dbUrlLength = process.env.DATABASE_URL ? process.env.DATABASE_URL.length : 0;
-  
-  res.json({
-    status: "API is running",
-    timestamp: new Date().toISOString(),
-    database: {
-      configured: dbUrlExists,
-      urlLength: dbUrlLength,
-      message: dbUrlExists 
-        ? "DATABASE_URL is set ✅" 
-        : "❌ DATABASE_URL is NOT set! Add it in Vercel Settings → Environment Variables"
-    }
-  });
-});
-
-// Initialize database connection only if DATABASE_URL exists
+// Database connection - uses environment variable
 let db = null;
 let sql = null;
 
-if (process.env.DATABASE_URL) {
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (DATABASE_URL) {
   try {
-    sql = neon(process.env.DATABASE_URL);
+    sql = neon(DATABASE_URL);
     db = drizzle(sql, { schema: { userProfiles, healthMetrics, exercises, foods, heartTips } });
-    console.log('✅ Database connection initialized successfully');
+    console.log('✅ Database connected successfully');
   } catch (error) {
-    console.error('❌ Database initialization failed:', error);
+    console.error('❌ Database connection failed:', error.message);
   }
+} else {
+  console.warn('⚠️ DATABASE_URL not set - database features will not work');
 }
 
 // Middleware to check database connection
@@ -125,14 +115,14 @@ const requireDatabase = (req, res, next) => {
   if (!db) {
     return res.status(503).json({ 
       error: "Database not configured",
-      message: "DATABASE_URL environment variable is missing. Please add it in Vercel Settings → Environment Variables",
-      instructions: "1. Go to your Vercel project settings\n2. Navigate to Environment Variables\n3. Add DATABASE_URL with your Neon database connection string"
+      message: "DATABASE_URL environment variable is missing",
+      hint: "Set DATABASE_URL in Vercel Environment Variables or Replit Secrets"
     });
   }
   next();
 };
 
-// Helper functions
+// Helper functions for database operations
 async function ensureProfile(ipAddress) {
   const profile = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
   if (profile.length === 0) {
@@ -150,6 +140,27 @@ async function ensureProfile(ipAddress) {
   }
   return profile[0];
 }
+
+// ============================================
+// ROUTES
+// ============================================
+
+// Health check endpoint (no database required)
+app.get("/api/health", (req, res) => {
+  const dbConfigured = !!DATABASE_URL && !!db;
+  
+  res.json({
+    status: "API is running ✅",
+    timestamp: new Date().toISOString(),
+    database: {
+      configured: dbConfigured,
+      message: dbConfigured 
+        ? "DATABASE_URL is set ✅" 
+        : "❌ DATABASE_URL is NOT set"
+    },
+    environment: process.env.VERCEL ? 'Vercel' : 'Development'
+  });
+});
 
 // Profile endpoints
 app.get("/api/profile", requireDatabase, async (req, res) => {
@@ -206,7 +217,7 @@ app.post("/api/profile", requireDatabase, async (req, res) => {
     console.error("Profile update error:", error);
     res.status(400).json({ 
       message: "Invalid profile data", 
-      details: error.message 
+      error: error.message 
     });
   }
 });
@@ -521,113 +532,22 @@ app.get("/api/heart-tips", requireDatabase, async (req, res) => {
   }
 });
 
-// Heart rate references endpoint
+// Heart rate references endpoint (no database required)
 app.get("/api/heart-rate-references", (req, res) => {
   const references = [
-    {
-      ageGroup: "Newborns (0-1 month)",
-      restingMin: 70,
-      restingMax: 190,
-      maxHeartRate: 220,
-      moderateMin: 110,
-      moderateMax: 154,
-    },
-    {
-      ageGroup: "Infants (1-11 months)",
-      restingMin: 80,
-      restingMax: 160,
-      maxHeartRate: 220,
-      moderateMin: 110,
-      moderateMax: 154,
-    },
-    {
-      ageGroup: "Children (1-2 years)",
-      restingMin: 80,
-      restingMax: 130,
-      maxHeartRate: 215,
-      moderateMin: 108,
-      moderateMax: 151,
-    },
-    {
-      ageGroup: "Children (3-4 years)",
-      restingMin: 80,
-      restingMax: 120,
-      maxHeartRate: 210,
-      moderateMin: 105,
-      moderateMax: 147,
-    },
-    {
-      ageGroup: "Children (5-6 years)",
-      restingMin: 75,
-      restingMax: 115,
-      maxHeartRate: 205,
-      moderateMin: 103,
-      moderateMax: 144,
-    },
-    {
-      ageGroup: "Children (7-9 years)",
-      restingMin: 70,
-      restingMax: 110,
-      maxHeartRate: 200,
-      moderateMin: 100,
-      moderateMax: 140,
-    },
-    {
-      ageGroup: "Children (10-15 years)",
-      restingMin: 60,
-      restingMax: 100,
-      maxHeartRate: 195,
-      moderateMin: 98,
-      moderateMax: 137,
-    },
-    {
-      ageGroup: "Adults (18-25 years)",
-      restingMin: 60,
-      restingMax: 100,
-      maxHeartRate: 195,
-      moderateMin: 98,
-      moderateMax: 137,
-    },
-    {
-      ageGroup: "Adults (26-35 years)",
-      restingMin: 60,
-      restingMax: 100,
-      maxHeartRate: 190,
-      moderateMin: 95,
-      moderateMax: 133,
-    },
-    {
-      ageGroup: "Adults (36-45 years)",
-      restingMin: 60,
-      restingMax: 100,
-      maxHeartRate: 185,
-      moderateMin: 93,
-      moderateMax: 130,
-    },
-    {
-      ageGroup: "Adults (46-55 years)",
-      restingMin: 60,
-      restingMax: 100,
-      maxHeartRate: 175,
-      moderateMin: 88,
-      moderateMax: 123,
-    },
-    {
-      ageGroup: "Adults (56-65 years)",
-      restingMin: 60,
-      restingMax: 100,
-      maxHeartRate: 165,
-      moderateMin: 83,
-      moderateMax: 116,
-    },
-    {
-      ageGroup: "Seniors (65+ years)",
-      restingMin: 60,
-      restingMax: 100,
-      maxHeartRate: 155,
-      moderateMin: 78,
-      moderateMax: 109,
-    },
+    { ageGroup: "Newborns (0-1 month)", restingMin: 70, restingMax: 190, maxHeartRate: 220, moderateMin: 110, moderateMax: 154 },
+    { ageGroup: "Infants (1-11 months)", restingMin: 80, restingMax: 160, maxHeartRate: 220, moderateMin: 110, moderateMax: 154 },
+    { ageGroup: "Children (1-2 years)", restingMin: 80, restingMax: 130, maxHeartRate: 215, moderateMin: 108, moderateMax: 151 },
+    { ageGroup: "Children (3-4 years)", restingMin: 80, restingMax: 120, maxHeartRate: 210, moderateMin: 105, moderateMax: 147 },
+    { ageGroup: "Children (5-6 years)", restingMin: 75, restingMax: 115, maxHeartRate: 205, moderateMin: 103, moderateMax: 144 },
+    { ageGroup: "Children (7-9 years)", restingMin: 70, restingMax: 110, maxHeartRate: 200, moderateMin: 100, moderateMax: 140 },
+    { ageGroup: "Children (10-15 years)", restingMin: 60, restingMax: 100, maxHeartRate: 195, moderateMin: 98, moderateMax: 137 },
+    { ageGroup: "Adults (18-25 years)", restingMin: 60, restingMax: 100, maxHeartRate: 195, moderateMin: 98, moderateMax: 137 },
+    { ageGroup: "Adults (26-35 years)", restingMin: 60, restingMax: 100, maxHeartRate: 190, moderateMin: 95, moderateMax: 133 },
+    { ageGroup: "Adults (36-45 years)", restingMin: 60, restingMax: 100, maxHeartRate: 185, moderateMin: 93, moderateMax: 130 },
+    { ageGroup: "Adults (46-55 years)", restingMin: 60, restingMax: 100, maxHeartRate: 175, moderateMin: 88, moderateMax: 123 },
+    { ageGroup: "Adults (56-65 years)", restingMin: 60, restingMax: 100, maxHeartRate: 165, moderateMin: 83, moderateMax: 116 },
+    { ageGroup: "Seniors (65+ years)", restingMin: 60, restingMax: 100, maxHeartRate: 155, moderateMin: 78, moderateMax: 109 },
   ];
   res.json(references);
 });
@@ -716,6 +636,38 @@ app.get("/api/walking-recommendation", requireDatabase, async (req, res) => {
   }
 });
 
-// Export for Vercel serverless - Vercel needs the app as default export
-// This allows Vercel to handle the Express app as a serverless function
+// Catch-all for undefined routes
+app.use((req, res) => {
+  res.status(404).json({ 
+    error: "Not Found",
+    message: `Route ${req.method} ${req.path} not found`,
+    availableRoutes: [
+      "GET /api/health",
+      "GET /api/profile",
+      "POST /api/profile",
+      "GET /api/bmi",
+      "GET /api/health-metrics/today",
+      "POST /api/health-metrics/steps",
+      "POST /api/health-metrics/heart-rate",
+      "POST /api/health-metrics/blood-pressure",
+      "GET /api/exercises",
+      "GET /api/foods",
+      "GET /api/heart-tips",
+      "GET /api/heart-rate-references",
+      "GET /api/walking-recommendation"
+    ]
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    error: "Internal Server Error",
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
+
+// Export for Vercel serverless functions
 export default app;
