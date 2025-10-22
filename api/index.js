@@ -89,7 +89,7 @@ function getClientIdentifier(req) {
 }
 
 // Health check endpoint
-app.get("/api/health", (req, res) => {
+app.get("/health", (req, res) => {
   const dbUrlExists = !!process.env.DATABASE_URL;
   const dbUrlLength = process.env.DATABASE_URL ? process.env.DATABASE_URL.length : 0;
   
@@ -152,7 +152,7 @@ async function ensureProfile(ipAddress) {
 }
 
 // Profile endpoints
-app.get("/api/profile", requireDatabase, async (req, res) => {
+app.get("/profile", requireDatabase, async (req, res) => {
   try {
     const ipAddress = getClientIdentifier(req);
     const result = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
@@ -174,7 +174,7 @@ app.get("/api/profile", requireDatabase, async (req, res) => {
   }
 });
 
-app.post("/api/profile", requireDatabase, async (req, res) => {
+app.post("/profile", requireDatabase, async (req, res) => {
   try {
     const ipAddress = getClientIdentifier(req);
     const existing = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
@@ -212,7 +212,7 @@ app.post("/api/profile", requireDatabase, async (req, res) => {
 });
 
 // BMI calculation endpoint
-app.get("/api/bmi", requireDatabase, async (req, res) => {
+app.get("/bmi", requireDatabase, async (req, res) => {
   try {
     const ipAddress = getClientIdentifier(req);
     const result = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
@@ -250,7 +250,7 @@ app.get("/api/bmi", requireDatabase, async (req, res) => {
 });
 
 // Health metrics endpoints
-app.get("/api/health-metrics/today", requireDatabase, async (req, res) => {
+app.get("/health-metrics/today", requireDatabase, async (req, res) => {
   try {
     const ipAddress = getClientIdentifier(req);
     const profile = await ensureProfile(ipAddress);
@@ -296,7 +296,7 @@ app.get("/api/health-metrics/today", requireDatabase, async (req, res) => {
   }
 });
 
-app.post("/api/health-metrics/steps", requireDatabase, async (req, res) => {
+app.post("/health-metrics/steps", requireDatabase, async (req, res) => {
   try {
     const { steps } = req.body;
     if (typeof steps !== "number" || steps < 0) {
@@ -348,7 +348,7 @@ app.post("/api/health-metrics/steps", requireDatabase, async (req, res) => {
   }
 });
 
-app.post("/api/health-metrics/heart-rate", requireDatabase, async (req, res) => {
+app.post("/health-metrics/heart-rate", requireDatabase, async (req, res) => {
   try {
     const { heartRate } = req.body;
     if (typeof heartRate !== "number" || heartRate < 30 || heartRate > 250) {
@@ -400,7 +400,7 @@ app.post("/api/health-metrics/heart-rate", requireDatabase, async (req, res) => 
   }
 });
 
-app.post("/api/health-metrics/blood-pressure", requireDatabase, async (req, res) => {
+app.post("/health-metrics/blood-pressure", requireDatabase, async (req, res) => {
   try {
     const { systolic, diastolic } = req.body;
     if (
@@ -461,7 +461,7 @@ app.post("/api/health-metrics/blood-pressure", requireDatabase, async (req, res)
 });
 
 // Exercises endpoint
-app.get("/api/exercises", requireDatabase, async (req, res) => {
+app.get("/exercises", requireDatabase, async (req, res) => {
   try {
     const result = await db.select().from(exercises);
     const exerciseList = result.map((e) => ({
@@ -483,7 +483,7 @@ app.get("/api/exercises", requireDatabase, async (req, res) => {
 });
 
 // Foods endpoint
-app.get("/api/foods", requireDatabase, async (req, res) => {
+app.get("/foods", requireDatabase, async (req, res) => {
   try {
     const result = await db.select().from(foods);
     const foodList = result.map((f) => ({
@@ -504,7 +504,7 @@ app.get("/api/foods", requireDatabase, async (req, res) => {
 });
 
 // Heart tips endpoint
-app.get("/api/heart-tips", requireDatabase, async (req, res) => {
+app.get("/heart-tips", requireDatabase, async (req, res) => {
   try {
     const result = await db.select().from(heartTips);
     const tipsList = result.map((t) => ({
@@ -522,7 +522,7 @@ app.get("/api/heart-tips", requireDatabase, async (req, res) => {
 });
 
 // Heart rate references endpoint
-app.get("/api/heart-rate-references", (req, res) => {
+app.get("/heart-rate-references", (req, res) => {
   const references = [
     {
       ageGroup: "Newborns (0-1 month)",
@@ -633,7 +633,7 @@ app.get("/api/heart-rate-references", (req, res) => {
 });
 
 // Walking recommendation endpoint
-app.get("/api/walking-recommendation", requireDatabase, async (req, res) => {
+app.get("/walking-recommendation", requireDatabase, async (req, res) => {
   try {
     const ipAddress = getClientIdentifier(req);
     const result = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
