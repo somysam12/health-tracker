@@ -11,12 +11,12 @@ import type {
 } from "../shared/schema.js";
 
 export interface IStorage {
-  getProfile(): Promise<UserProfile | undefined>;
-  updateProfile(profile: UserProfile): Promise<UserProfile>;
-  getTodayMetrics(): Promise<HealthMetrics | undefined>;
-  updateSteps(steps: number): Promise<HealthMetrics>;
-  updateHeartRate(heartRate: number): Promise<HealthMetrics>;
-  updateBloodPressure(systolic: number, diastolic: number): Promise<HealthMetrics>;
+  getProfile(ipAddress: string): Promise<UserProfile | undefined>;
+  updateProfile(ipAddress: string, profile: UserProfile): Promise<UserProfile>;
+  getTodayMetrics(ipAddress: string): Promise<HealthMetrics | undefined>;
+  updateSteps(ipAddress: string, steps: number): Promise<HealthMetrics>;
+  updateHeartRate(ipAddress: string, heartRate: number): Promise<HealthMetrics>;
+  updateBloodPressure(ipAddress: string, systolic: number, diastolic: number): Promise<HealthMetrics>;
   getAllExercises(): Promise<Exercise[]>;
   getAllFoods(): Promise<Food[]>;
   getAllHeartTips(): Promise<HeartPatientTip[]>;
@@ -135,8 +135,8 @@ export class DatabaseStorage implements IStorage {
     ];
   }
 
-  async getProfile(): Promise<UserProfile | undefined> {
-    const result = await db.select().from(userProfiles).limit(1);
+  async getProfile(ipAddress: string): Promise<UserProfile | undefined> {
+    const result = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
     if (result.length === 0) return undefined;
     
     const profile = result[0];
@@ -148,11 +148,12 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async updateProfile(profile: UserProfile): Promise<UserProfile> {
-    const existing = await db.select().from(userProfiles).limit(1);
+  async updateProfile(ipAddress: string, profile: UserProfile): Promise<UserProfile> {
+    const existing = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
     
     if (existing.length === 0) {
       await db.insert(userProfiles).values({
+        ipAddress,
         height: profile.height,
         weight: profile.weight,
         age: profile.age,
@@ -174,13 +175,23 @@ export class DatabaseStorage implements IStorage {
     return profile;
   }
 
-  async getTodayMetrics(): Promise<HealthMetrics | undefined> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  async getTodayMetrics(ipAddress: string): Promise<HealthMetrics | undefined> {
+    const profile = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
+    
+    if (profile.length === 0) {
+      return {
+        steps: 0,
+        heartRate: 72,
+        systolicBP: 120,
+        diastolicBP: 80,
+        date: new Date().toISOString(),
+      };
+    }
     
     const result = await db
       .select()
       .from(healthMetrics)
+      .where(eq(healthMetrics.userId, profile[0].id))
       .orderBy(desc(healthMetrics.date))
       .limit(1);
     
@@ -193,16 +204,13 @@ export class DatabaseStorage implements IStorage {
         date: new Date().toISOString(),
       };
       
-      const profile = await db.select().from(userProfiles).limit(1);
-      if (profile.length > 0) {
-        await db.insert(healthMetrics).values({
-          userId: profile[0].id,
-          steps: 0,
-          heartRate: 72,
-          systolicBP: 120,
-          diastolicBP: 80,
-        });
-      }
+      await db.insert(healthMetrics).values({
+        userId: profile[0].id,
+        steps: 0,
+        heartRate: 72,
+        systolicBP: 120,
+        diastolicBP: 80,
+      });
       
       return defaultMetrics;
     }
@@ -217,11 +225,12 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async updateSteps(steps: number): Promise<HealthMetrics> {
-    const profile = await this.ensureProfile();
+  async updateSteps(ipAddress: string, steps: number): Promise<HealthMetrics> {
+    const profile = await this.ensureProfile(ipAddress);
     const latestMetric = await db
       .select()
       .from(healthMetrics)
+      .where(eq(healthMetrics.userId, profile.id))
       .orderBy(desc(healthMetrics.date))
       .limit(1);
     
@@ -257,11 +266,12 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateHeartRate(heartRate: number): Promise<HealthMetrics> {
-    const profile = await this.ensureProfile();
+  async updateHeartRate(ipAddress: string, heartRate: number): Promise<HealthMetrics> {
+    const profile = await this.ensureProfile(ipAddress);
     const latestMetric = await db
       .select()
       .from(healthMetrics)
+      .where(eq(healthMetrics.userId, profile.id))
       .orderBy(desc(healthMetrics.date))
       .limit(1);
     
@@ -298,13 +308,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateBloodPressure(
+    ipAddress: string,
     systolic: number,
     diastolic: number,
   ): Promise<HealthMetrics> {
-    const profile = await this.ensureProfile();
+    const profile = await this.ensureProfile(ipAddress);
     const latestMetric = await db
       .select()
       .from(healthMetrics)
+      .where(eq(healthMetrics.userId, profile.id))
       .orderBy(desc(healthMetrics.date))
       .limit(1);
     
@@ -384,12 +396,13 @@ export class DatabaseStorage implements IStorage {
     return this.heartRateReferences;
   }
 
-  private async ensureProfile() {
-    const profile = await db.select().from(userProfiles).limit(1);
+  private async ensureProfile(ipAddress: string) {
+    const profile = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
     if (profile.length === 0) {
       const result = await db
         .insert(userProfiles)
         .values({
+          ipAddress,
           height: 170,
           weight: 70,
           age: 30,

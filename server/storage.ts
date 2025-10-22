@@ -9,14 +9,14 @@ import type {
 
 export interface IStorage {
   // Profile
-  getProfile(): Promise<UserProfile | undefined>;
-  updateProfile(profile: UserProfile): Promise<UserProfile>;
+  getProfile(ipAddress: string): Promise<UserProfile | undefined>;
+  updateProfile(ipAddress: string, profile: UserProfile): Promise<UserProfile>;
 
   // Health Metrics
-  getTodayMetrics(): Promise<HealthMetrics | undefined>;
-  updateSteps(steps: number): Promise<HealthMetrics>;
-  updateHeartRate(heartRate: number): Promise<HealthMetrics>;
-  updateBloodPressure(systolic: number, diastolic: number): Promise<HealthMetrics>;
+  getTodayMetrics(ipAddress: string): Promise<HealthMetrics | undefined>;
+  updateSteps(ipAddress: string, steps: number): Promise<HealthMetrics>;
+  updateHeartRate(ipAddress: string, heartRate: number): Promise<HealthMetrics>;
+  updateBloodPressure(ipAddress: string, systolic: number, diastolic: number): Promise<HealthMetrics>;
 
   // Exercises
   getAllExercises(): Promise<Exercise[]>;
@@ -32,8 +32,8 @@ export interface IStorage {
 }
 
 export class MemStorage implements IStorage {
-  private profile: UserProfile | undefined;
-  private todayMetrics: HealthMetrics;
+  private profiles: Map<string, UserProfile>;
+  private metrics: Map<string, HealthMetrics>;
   private exercises: Exercise[];
   private foods: Food[];
   private heartTips: HeartPatientTip[];
@@ -41,13 +41,8 @@ export class MemStorage implements IStorage {
 
   constructor() {
     // Initialize with default data
-    this.todayMetrics = {
-      steps: 0,
-      heartRate: 72,
-      systolicBP: 120,
-      diastolicBP: 80,
-      date: new Date().toISOString(),
-    };
+    this.profiles = new Map();
+    this.metrics = new Map();
 
     // Heart Rate References by age
     this.heartRateReferences = [
@@ -630,39 +625,84 @@ export class MemStorage implements IStorage {
     ];
   }
 
-  async getProfile(): Promise<UserProfile | undefined> {
-    return this.profile;
+  async getProfile(ipAddress: string): Promise<UserProfile | undefined> {
+    return this.profiles.get(ipAddress);
   }
 
-  async updateProfile(profile: UserProfile): Promise<UserProfile> {
-    this.profile = profile;
-    return this.profile;
+  async updateProfile(ipAddress: string, profile: UserProfile): Promise<UserProfile> {
+    this.profiles.set(ipAddress, profile);
+    return profile;
   }
 
-  async getTodayMetrics(): Promise<HealthMetrics | undefined> {
-    return this.todayMetrics;
+  async getTodayMetrics(ipAddress: string): Promise<HealthMetrics | undefined> {
+    let metrics = this.metrics.get(ipAddress);
+    if (!metrics) {
+      metrics = {
+        steps: 0,
+        heartRate: 72,
+        systolicBP: 120,
+        diastolicBP: 80,
+        date: new Date().toISOString(),
+      };
+      this.metrics.set(ipAddress, metrics);
+    }
+    return metrics;
   }
 
-  async updateSteps(steps: number): Promise<HealthMetrics> {
-    this.todayMetrics.steps = steps;
-    this.todayMetrics.date = new Date().toISOString();
-    return this.todayMetrics;
+  async updateSteps(ipAddress: string, steps: number): Promise<HealthMetrics> {
+    let metrics = this.metrics.get(ipAddress);
+    if (!metrics) {
+      metrics = {
+        steps: 0,
+        heartRate: 72,
+        systolicBP: 120,
+        diastolicBP: 80,
+        date: new Date().toISOString(),
+      };
+    }
+    metrics.steps = steps;
+    metrics.date = new Date().toISOString();
+    this.metrics.set(ipAddress, metrics);
+    return metrics;
   }
 
-  async updateHeartRate(heartRate: number): Promise<HealthMetrics> {
-    this.todayMetrics.heartRate = heartRate;
-    this.todayMetrics.date = new Date().toISOString();
-    return this.todayMetrics;
+  async updateHeartRate(ipAddress: string, heartRate: number): Promise<HealthMetrics> {
+    let metrics = this.metrics.get(ipAddress);
+    if (!metrics) {
+      metrics = {
+        steps: 0,
+        heartRate: 72,
+        systolicBP: 120,
+        diastolicBP: 80,
+        date: new Date().toISOString(),
+      };
+    }
+    metrics.heartRate = heartRate;
+    metrics.date = new Date().toISOString();
+    this.metrics.set(ipAddress, metrics);
+    return metrics;
   }
 
   async updateBloodPressure(
+    ipAddress: string,
     systolic: number,
     diastolic: number,
   ): Promise<HealthMetrics> {
-    this.todayMetrics.systolicBP = systolic;
-    this.todayMetrics.diastolicBP = diastolic;
-    this.todayMetrics.date = new Date().toISOString();
-    return this.todayMetrics;
+    let metrics = this.metrics.get(ipAddress);
+    if (!metrics) {
+      metrics = {
+        steps: 0,
+        heartRate: 72,
+        systolicBP: 120,
+        diastolicBP: 80,
+        date: new Date().toISOString(),
+      };
+    }
+    metrics.systolicBP = systolic;
+    metrics.diastolicBP = diastolic;
+    metrics.date = new Date().toISOString();
+    this.metrics.set(ipAddress, metrics);
+    return metrics;
   }
 
   async getAllExercises(): Promise<Exercise[]> {

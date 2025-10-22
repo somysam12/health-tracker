@@ -3,24 +3,41 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { userProfileSchema, insertHealthMetricsSchema } from "../shared/schema.js";
 
+function getClientIdentifier(req: any): string {
+  const ip = req.ip || req.socket?.remoteAddress;
+  
+  if (!ip || ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
+    if (!req.session.userId) {
+      req.session.userId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    }
+    return req.session.userId;
+  }
+  
+  const cleanIp = ip.replace(/^::ffff:/, '');
+  return `ip_${cleanIp}`;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Profile endpoints
   app.get("/api/profile", async (req, res) => {
     try {
-      const profile = await storage.getProfile();
+      const ipAddress = getClientIdentifier(req);
+      const profile = await storage.getProfile(ipAddress);
       if (!profile) {
         return res.status(404).json({ message: "Profile not found" });
       }
       res.json(profile);
     } catch (error) {
+      console.error("Profile fetch error:", error);
       res.status(500).json({ message: "Failed to fetch profile" });
     }
   });
 
   app.post("/api/profile", async (req, res) => {
     try {
+      const ipAddress = getClientIdentifier(req);
       // Get existing profile or use defaults
-      const existingProfile = await storage.getProfile();
+      const existingProfile = await storage.getProfile(ipAddress);
       
       // Merge with new data, using defaults for missing fields
       const profileData = {
@@ -31,7 +48,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const validatedData = userProfileSchema.parse(profileData);
-      const profile = await storage.updateProfile(validatedData);
+      const profile = await storage.updateProfile(ipAddress, validatedData);
       res.json(profile);
     } catch (error: any) {
       console.error("Profile update error:", error);
@@ -45,7 +62,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // BMI calculation endpoint
   app.get("/api/bmi", async (req, res) => {
     try {
-      const profile = await storage.getProfile();
+      const ipAddress = getClientIdentifier(req);
+      const profile = await storage.getProfile(ipAddress);
       if (!profile) {
         return res.status(404).json({ message: "Profile not found. Please enter your height and weight." });
       }
@@ -79,7 +97,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Health metrics endpoints
   app.get("/api/health-metrics/today", async (req, res) => {
     try {
-      const metrics = await storage.getTodayMetrics();
+      const ipAddress = getClientIdentifier(req);
+      const metrics = await storage.getTodayMetrics(ipAddress);
       res.json(metrics);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch health metrics" });
@@ -88,11 +107,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/health-metrics/steps", async (req, res) => {
     try {
+      const ipAddress = getClientIdentifier(req);
       const { steps } = req.body;
       if (typeof steps !== "number" || steps < 0) {
         return res.status(400).json({ message: "Invalid steps value" });
       }
-      const metrics = await storage.updateSteps(steps);
+      const metrics = await storage.updateSteps(ipAddress, steps);
       res.json(metrics);
     } catch (error) {
       res.status(500).json({ message: "Failed to update steps" });
@@ -101,11 +121,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/health-metrics/heart-rate", async (req, res) => {
     try {
+      const ipAddress = getClientIdentifier(req);
       const { heartRate } = req.body;
       if (typeof heartRate !== "number" || heartRate < 30 || heartRate > 250) {
         return res.status(400).json({ message: "Invalid heart rate value" });
       }
-      const metrics = await storage.updateHeartRate(heartRate);
+      const metrics = await storage.updateHeartRate(ipAddress, heartRate);
       res.json(metrics);
     } catch (error) {
       res.status(500).json({ message: "Failed to update heart rate" });
@@ -114,6 +135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/health-metrics/blood-pressure", async (req, res) => {
     try {
+      const ipAddress = getClientIdentifier(req);
       const { systolic, diastolic } = req.body;
       if (
         typeof systolic !== "number" ||
@@ -126,7 +148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ) {
         return res.status(400).json({ message: "Invalid blood pressure values" });
       }
-      const metrics = await storage.updateBloodPressure(systolic, diastolic);
+      const metrics = await storage.updateBloodPressure(ipAddress, systolic, diastolic);
       res.json(metrics);
     } catch (error) {
       res.status(500).json({ message: "Failed to update blood pressure" });
@@ -176,8 +198,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Walking recommendation endpoint
   app.get("/api/walking-recommendation", async (req, res) => {
     try {
-      const profile = await storage.getProfile();
-      const metrics = await storage.getTodayMetrics();
+      const ipAddress = getClientIdentifier(req);
+      const profile = await storage.getProfile(ipAddress);
+      const metrics = await storage.getTodayMetrics(ipAddress);
 
       let recommendation;
 

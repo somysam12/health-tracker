@@ -105,6 +105,7 @@ import { pgTable, serial, varchar, integer, timestamp, real, text } from "drizzl
 
 export const userProfiles = pgTable("user_profiles", {
   id: serial("id").primaryKey(),
+  ipAddress: varchar("ip_address", { length: 100 }).notNull().unique(),
   height: real("height").notNull(),
   weight: real("weight").notNull(),
   age: integer("age").notNull(),
