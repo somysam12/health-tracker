@@ -1,5 +1,5 @@
-import { db } from "./db";
-import { userProfiles, healthMetrics, exercises, foods, heartTips } from "./db/schema";
+import { db } from "./db/index.js";
+import { userProfiles, healthMetrics, exercises, foods, heartTips } from "./db/schema.js";
 import { eq, desc } from "drizzle-orm";
 import type {
   UserProfile,
@@ -8,7 +8,7 @@ import type {
   Food,
   HeartPatientTip,
   HeartRateReference,
-} from "@shared/schema";
+} from "../shared/schema.js";
 
 export interface IStorage {
   getProfile(): Promise<UserProfile | undefined>;

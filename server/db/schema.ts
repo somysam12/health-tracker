@@ -4,4 +4,4 @@ export {
   exercises,
   foods,
   heartTips,
-} from "@shared/schema";
+} from "../../shared/schema.js";

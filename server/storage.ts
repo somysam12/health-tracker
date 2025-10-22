@@ -5,7 +5,7 @@ import type {
   Food,
   HeartPatientTip,
   HeartRateReference,
-} from "@shared/schema";
+} from "../shared/schema.js";
 
 export interface IStorage {
   // Profile
@@ -682,4 +682,6 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+import { dbStorage } from "./db-storage.js";
+
+export const storage = process.env.DATABASE_URL ? dbStorage : new MemStorage();
