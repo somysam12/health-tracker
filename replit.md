@@ -1,4 +1,11 @@
-# Health Monitoring App
+# AiSmartWatch - Health Monitoring App
+
+## Project Information
+
+**Website Name:** AiSmartWatch  
+**Company:** Trio  
+**Co-Founder:** Neeraj Kumar Yadav  
+**Publisher:** Shashwat
 
 ## Overview
 
