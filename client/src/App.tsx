@@ -48,7 +48,12 @@ function App() {
               <AppSidebar />
               <div className="flex flex-col flex-1 overflow-hidden">
                 <header className="flex items-center justify-between p-4 border-b bg-background">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
+                  <div className="flex items-center gap-4">
+                    <SidebarTrigger data-testid="button-sidebar-toggle" />
+                    <span className="text-sm text-muted-foreground" data-testid="text-credit-top">
+                      made with ❤️ by Shashwat
+                    </span>
+                  </div>
                   <ThemeToggle />
                 </header>
                 <main className="flex-1 overflow-y-auto p-6 md:p-8">
@@ -56,6 +61,11 @@ function App() {
                     <Router />
                   </div>
                 </main>
+                <footer className="border-t bg-background p-4 text-center">
+                  <p className="text-sm text-muted-foreground" data-testid="text-credit-bottom">
+                    made with ❤️ by Shashwat
+                  </p>
+                </footer>
               </div>
             </div>
           </SidebarProvider>
