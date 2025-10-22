@@ -5,6 +5,9 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
+// Trust proxy for Vercel/production deployments to get real client IP
+app.set('trust proxy', 1);
+
 declare module 'express-session' {
   interface SessionData {
     userId: string;

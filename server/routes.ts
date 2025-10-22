@@ -4,8 +4,14 @@ import { storage } from "./storage";
 import { userProfileSchema, insertHealthMetricsSchema } from "../shared/schema.js";
 
 function getClientIdentifier(req: any): string {
-  const ip = req.ip || req.socket?.remoteAddress;
+  // Try to get IP from various sources (Vercel, proxies, etc.)
+  let ip = req.ip || 
+           req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+           req.headers['x-real-ip'] ||
+           req.socket?.remoteAddress ||
+           req.connection?.remoteAddress;
   
+  // If still no IP or localhost, use session-based identifier
   if (!ip || ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
     if (!req.session.userId) {
       req.session.userId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -13,6 +19,7 @@ function getClientIdentifier(req: any): string {
     return req.session.userId;
   }
   
+  // Clean the IP address (remove IPv6 prefix)
   const cleanIp = ip.replace(/^::ffff:/, '');
   return `ip_${cleanIp}`;
 }
