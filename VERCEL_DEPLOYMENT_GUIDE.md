@@ -42,8 +42,8 @@ git push -u origin main
 2. Apni GitHub repository select karein
 3. **Framework Preset:** Vite automatically detect ho jayega
 4. **Build & Development Settings:**
-   - Build Command: `vite build`
-   - Output Directory: `dist`
+   - Build Command: `npm run vercel-build`
+   - Output Directory: `dist/public`
    - Install Command: `npm install`
 
 #### Step 4: Environment Variables Add Karein
