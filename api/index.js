@@ -20,7 +20,23 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint - CRITICAL FOR DEBUGGING
+// Helper function to get client identifier
+function getClientIdentifier(req) {
+  // Try to get real IP from Vercel headers
+  let ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+           req.headers['x-real-ip'] ||
+           req.ip ||
+           'demo-user';
+  
+  // Clean and validate IP
+  if (!ip || ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
+    ip = 'demo-user';
+  }
+  
+  return ip.replace(/^::ffff:/, '').trim();
+}
+
+// Health check endpoint
 app.get("/api/health", (req, res) => {
   const dbUrlExists = !!process.env.DATABASE_URL;
   const dbUrlLength = process.env.DATABASE_URL ? process.env.DATABASE_URL.length : 0;
@@ -41,11 +57,6 @@ app.get("/api/health", (req, res) => {
 // Check DATABASE_URL before initializing database
 if (!process.env.DATABASE_URL) {
   console.error('❌ CRITICAL ERROR: DATABASE_URL environment variable is not set!');
-  console.error('Please add DATABASE_URL in Vercel Settings → Environment Variables → Add New');
-  console.error('Then redeploy your application');
-  
-  // Don't throw - let health endpoint work for diagnostics
-  // We'll handle this in each route
 }
 
 // Initialize database connection only if DATABASE_URL exists
@@ -67,27 +78,20 @@ const requireDatabase = (req, res, next) => {
   if (!db) {
     return res.status(503).json({ 
       error: "Database not configured",
-      message: "DATABASE_URL environment variable is missing. Please add it in Vercel Settings → Environment Variables",
-      instructions: [
-        "1. Go to Vercel Dashboard → Your Project",
-        "2. Click Settings → Environment Variables",
-        "3. Add: Name=DATABASE_URL, Value=your_neon_connection_string",
-        "4. Select: Production, Preview, Development (all three)",
-        "5. Click Save",
-        "6. Redeploy your application"
-      ]
+      message: "DATABASE_URL environment variable is missing"
     });
   }
   next();
 };
 
 // Helper functions
-async function ensureProfile() {
-  const profile = await db.select().from(userProfiles).limit(1);
+async function ensureProfile(ipAddress) {
+  const profile = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
   if (profile.length === 0) {
     const result = await db
       .insert(userProfiles)
       .values({
+        ipAddress: ipAddress,
         height: 170,
         weight: 70,
         age: 30,
@@ -102,7 +106,9 @@ async function ensureProfile() {
 // Profile endpoints
 app.get("/api/profile", requireDatabase, async (req, res) => {
   try {
-    const result = await db.select().from(userProfiles).limit(1);
+    const ipAddress = getClientIdentifier(req);
+    const result = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
+    
     if (result.length === 0) {
       return res.status(404).json({ message: "Profile not found" });
     }
@@ -122,7 +128,8 @@ app.get("/api/profile", requireDatabase, async (req, res) => {
 
 app.post("/api/profile", requireDatabase, async (req, res) => {
   try {
-    const existing = await db.select().from(userProfiles).limit(1);
+    const ipAddress = getClientIdentifier(req);
+    const existing = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
     
     const profileData = {
       height: req.body.height ?? 170,
@@ -132,7 +139,10 @@ app.post("/api/profile", requireDatabase, async (req, res) => {
     };
 
     if (existing.length === 0) {
-      await db.insert(userProfiles).values(profileData);
+      await db.insert(userProfiles).values({
+        ipAddress: ipAddress,
+        ...profileData
+      });
     } else {
       await db
         .update(userProfiles)
@@ -156,7 +166,9 @@ app.post("/api/profile", requireDatabase, async (req, res) => {
 // BMI calculation endpoint
 app.get("/api/bmi", requireDatabase, async (req, res) => {
   try {
-    const result = await db.select().from(userProfiles).limit(1);
+    const ipAddress = getClientIdentifier(req);
+    const result = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
+    
     if (result.length === 0) {
       return res.status(404).json({ message: "Profile not found. Please enter your height and weight." });
     }
@@ -192,9 +204,13 @@ app.get("/api/bmi", requireDatabase, async (req, res) => {
 // Health metrics endpoints
 app.get("/api/health-metrics/today", requireDatabase, async (req, res) => {
   try {
+    const ipAddress = getClientIdentifier(req);
+    const profile = await ensureProfile(ipAddress);
+    
     const result = await db
       .select()
       .from(healthMetrics)
+      .where(eq(healthMetrics.userId, profile.id))
       .orderBy(desc(healthMetrics.date))
       .limit(1);
     
@@ -207,16 +223,13 @@ app.get("/api/health-metrics/today", requireDatabase, async (req, res) => {
         date: new Date().toISOString(),
       };
       
-      const profile = await db.select().from(userProfiles).limit(1);
-      if (profile.length > 0) {
-        await db.insert(healthMetrics).values({
-          userId: profile[0].id,
-          steps: 0,
-          heartRate: 72,
-          systolicBP: 120,
-          diastolicBP: 80,
-        });
-      }
+      await db.insert(healthMetrics).values({
+        userId: profile.id,
+        steps: 0,
+        heartRate: 72,
+        systolicBP: 120,
+        diastolicBP: 80,
+      });
       
       return res.json(defaultMetrics);
     }
@@ -242,10 +255,12 @@ app.post("/api/health-metrics/steps", requireDatabase, async (req, res) => {
       return res.status(400).json({ message: "Invalid steps value" });
     }
 
-    const profile = await ensureProfile();
+    const ipAddress = getClientIdentifier(req);
+    const profile = await ensureProfile(ipAddress);
     const latestMetric = await db
       .select()
       .from(healthMetrics)
+      .where(eq(healthMetrics.userId, profile.id))
       .orderBy(desc(healthMetrics.date))
       .limit(1);
     
@@ -292,10 +307,12 @@ app.post("/api/health-metrics/heart-rate", requireDatabase, async (req, res) => 
       return res.status(400).json({ message: "Invalid heart rate value" });
     }
 
-    const profile = await ensureProfile();
+    const ipAddress = getClientIdentifier(req);
+    const profile = await ensureProfile(ipAddress);
     const latestMetric = await db
       .select()
       .from(healthMetrics)
+      .where(eq(healthMetrics.userId, profile.id))
       .orderBy(desc(healthMetrics.date))
       .limit(1);
     
@@ -350,10 +367,12 @@ app.post("/api/health-metrics/blood-pressure", requireDatabase, async (req, res)
       return res.status(400).json({ message: "Invalid blood pressure values" });
     }
 
-    const profile = await ensureProfile();
+    const ipAddress = getClientIdentifier(req);
+    const profile = await ensureProfile(ipAddress);
     const latestMetric = await db
       .select()
       .from(healthMetrics)
+      .where(eq(healthMetrics.userId, profile.id))
       .orderBy(desc(healthMetrics.date))
       .limit(1);
     
@@ -568,7 +587,8 @@ app.get("/api/heart-rate-references", (req, res) => {
 // Walking recommendation endpoint
 app.get("/api/walking-recommendation", requireDatabase, async (req, res) => {
   try {
-    const result = await db.select().from(userProfiles).limit(1);
+    const ipAddress = getClientIdentifier(req);
+    const result = await db.select().from(userProfiles).where(eq(userProfiles.ipAddress, ipAddress)).limit(1);
 
     let recommendation;
 
