@@ -24,8 +24,10 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'health-monitor-secret-key-change-in-production',
   resave: false,
   saveUninitialized: true,
+  proxy: true, // Required for Vercel/production behind proxy
   cookie: {
     secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 365 * 24 * 60 * 60 * 1000
   }
 }));

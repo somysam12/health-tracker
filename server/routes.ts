@@ -5,23 +5,38 @@ import { userProfileSchema, insertHealthMetricsSchema } from "../shared/schema.j
 
 function getClientIdentifier(req: any): string {
   // Try to get IP from various sources (Vercel, proxies, etc.)
-  let ip = req.ip || 
-           req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+  let ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
            req.headers['x-real-ip'] ||
+           req.ip || 
            req.socket?.remoteAddress ||
            req.connection?.remoteAddress;
   
+  // Debug logging
+  console.log('IP Detection:', {
+    'x-forwarded-for': req.headers['x-forwarded-for'],
+    'x-real-ip': req.headers['x-real-ip'],
+    'req.ip': req.ip,
+    'detected': ip
+  });
+  
   // If still no IP or localhost, use session-based identifier
   if (!ip || ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
+    if (!req.session) {
+      console.warn('Session not available, creating temporary ID');
+      return `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    }
     if (!req.session.userId) {
       req.session.userId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     }
+    console.log('Using session ID:', req.session.userId);
     return req.session.userId;
   }
   
   // Clean the IP address (remove IPv6 prefix)
-  const cleanIp = ip.replace(/^::ffff:/, '');
-  return `ip_${cleanIp}`;
+  const cleanIp = ip.replace(/^::ffff:/, '').trim();
+  const identifier = `ip_${cleanIp}`;
+  console.log('Using IP identifier:', identifier);
+  return identifier;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -43,6 +58,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/profile", async (req, res) => {
     try {
       const ipAddress = getClientIdentifier(req);
+      
+      // Debug log for production troubleshooting
+      console.log("Client IP Address:", ipAddress);
+      
+      // Validate IP address is not null/undefined
+      if (!ipAddress || ipAddress === 'undefined' || ipAddress === 'null') {
+        return res.status(500).json({ 
+          message: "Failed to identify client", 
+          details: "Could not determine client IP address" 
+        });
+      }
+      
       // Get existing profile or use defaults
       const existingProfile = await storage.getProfile(ipAddress);
       
