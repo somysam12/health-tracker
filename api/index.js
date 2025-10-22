@@ -20,16 +20,66 @@ app.use((req, res, next) => {
   next();
 });
 
-// Check DATABASE_URL
+// Health check endpoint - CRITICAL FOR DEBUGGING
+app.get("/api/health", (req, res) => {
+  const dbUrlExists = !!process.env.DATABASE_URL;
+  const dbUrlLength = process.env.DATABASE_URL ? process.env.DATABASE_URL.length : 0;
+  
+  res.json({
+    status: "API is running",
+    timestamp: new Date().toISOString(),
+    database: {
+      configured: dbUrlExists,
+      urlLength: dbUrlLength,
+      message: dbUrlExists 
+        ? "DATABASE_URL is set ✅" 
+        : "❌ DATABASE_URL is NOT set! Add it in Vercel Settings → Environment Variables"
+    }
+  });
+});
+
+// Check DATABASE_URL before initializing database
 if (!process.env.DATABASE_URL) {
-  console.error('❌ DATABASE_URL environment variable is not set!');
-  console.error('Please add DATABASE_URL in Vercel Settings → Environment Variables');
-  throw new Error('DATABASE_URL is not configured');
+  console.error('❌ CRITICAL ERROR: DATABASE_URL environment variable is not set!');
+  console.error('Please add DATABASE_URL in Vercel Settings → Environment Variables → Add New');
+  console.error('Then redeploy your application');
+  
+  // Don't throw - let health endpoint work for diagnostics
+  // We'll handle this in each route
 }
 
-// Initialize database connection
-const sql = neon(process.env.DATABASE_URL);
-const db = drizzle(sql, { schema: { userProfiles, healthMetrics, exercises, foods, heartTips } });
+// Initialize database connection only if DATABASE_URL exists
+let db = null;
+let sql = null;
+
+if (process.env.DATABASE_URL) {
+  try {
+    sql = neon(process.env.DATABASE_URL);
+    db = drizzle(sql, { schema: { userProfiles, healthMetrics, exercises, foods, heartTips } });
+    console.log('✅ Database connection initialized successfully');
+  } catch (error) {
+    console.error('❌ Database initialization failed:', error);
+  }
+}
+
+// Middleware to check database connection
+const requireDatabase = (req, res, next) => {
+  if (!db) {
+    return res.status(503).json({ 
+      error: "Database not configured",
+      message: "DATABASE_URL environment variable is missing. Please add it in Vercel Settings → Environment Variables",
+      instructions: [
+        "1. Go to Vercel Dashboard → Your Project",
+        "2. Click Settings → Environment Variables",
+        "3. Add: Name=DATABASE_URL, Value=your_neon_connection_string",
+        "4. Select: Production, Preview, Development (all three)",
+        "5. Click Save",
+        "6. Redeploy your application"
+      ]
+    });
+  }
+  next();
+};
 
 // Helper functions
 async function ensureProfile() {
@@ -50,7 +100,7 @@ async function ensureProfile() {
 }
 
 // Profile endpoints
-app.get("/api/profile", async (req, res) => {
+app.get("/api/profile", requireDatabase, async (req, res) => {
   try {
     const result = await db.select().from(userProfiles).limit(1);
     if (result.length === 0) {
@@ -66,11 +116,11 @@ app.get("/api/profile", async (req, res) => {
     });
   } catch (error) {
     console.error("Profile fetch error:", error);
-    res.status(500).json({ message: "Failed to fetch profile" });
+    res.status(500).json({ message: "Failed to fetch profile", error: error.message });
   }
 });
 
-app.post("/api/profile", async (req, res) => {
+app.post("/api/profile", requireDatabase, async (req, res) => {
   try {
     const existing = await db.select().from(userProfiles).limit(1);
     
@@ -104,7 +154,7 @@ app.post("/api/profile", async (req, res) => {
 });
 
 // BMI calculation endpoint
-app.get("/api/bmi", async (req, res) => {
+app.get("/api/bmi", requireDatabase, async (req, res) => {
   try {
     const result = await db.select().from(userProfiles).limit(1);
     if (result.length === 0) {
@@ -135,12 +185,12 @@ app.get("/api/bmi", async (req, res) => {
     res.json({ bmi, category, recommendation });
   } catch (error) {
     console.error("BMI calculation error:", error);
-    res.status(500).json({ message: "Failed to calculate BMI" });
+    res.status(500).json({ message: "Failed to calculate BMI", error: error.message });
   }
 });
 
 // Health metrics endpoints
-app.get("/api/health-metrics/today", async (req, res) => {
+app.get("/api/health-metrics/today", requireDatabase, async (req, res) => {
   try {
     const result = await db
       .select()
@@ -181,11 +231,11 @@ app.get("/api/health-metrics/today", async (req, res) => {
     });
   } catch (error) {
     console.error("Health metrics error:", error);
-    res.status(500).json({ message: "Failed to fetch health metrics" });
+    res.status(500).json({ message: "Failed to fetch health metrics", error: error.message });
   }
 });
 
-app.post("/api/health-metrics/steps", async (req, res) => {
+app.post("/api/health-metrics/steps", requireDatabase, async (req, res) => {
   try {
     const { steps } = req.body;
     if (typeof steps !== "number" || steps < 0) {
@@ -231,11 +281,11 @@ app.post("/api/health-metrics/steps", async (req, res) => {
     }
   } catch (error) {
     console.error("Steps update error:", error);
-    res.status(500).json({ message: "Failed to update steps" });
+    res.status(500).json({ message: "Failed to update steps", error: error.message });
   }
 });
 
-app.post("/api/health-metrics/heart-rate", async (req, res) => {
+app.post("/api/health-metrics/heart-rate", requireDatabase, async (req, res) => {
   try {
     const { heartRate } = req.body;
     if (typeof heartRate !== "number" || heartRate < 30 || heartRate > 250) {
@@ -281,11 +331,11 @@ app.post("/api/health-metrics/heart-rate", async (req, res) => {
     }
   } catch (error) {
     console.error("Heart rate update error:", error);
-    res.status(500).json({ message: "Failed to update heart rate" });
+    res.status(500).json({ message: "Failed to update heart rate", error: error.message });
   }
 });
 
-app.post("/api/health-metrics/blood-pressure", async (req, res) => {
+app.post("/api/health-metrics/blood-pressure", requireDatabase, async (req, res) => {
   try {
     const { systolic, diastolic } = req.body;
     if (
@@ -339,12 +389,12 @@ app.post("/api/health-metrics/blood-pressure", async (req, res) => {
     }
   } catch (error) {
     console.error("Blood pressure update error:", error);
-    res.status(500).json({ message: "Failed to update blood pressure" });
+    res.status(500).json({ message: "Failed to update blood pressure", error: error.message });
   }
 });
 
 // Exercises endpoint
-app.get("/api/exercises", async (req, res) => {
+app.get("/api/exercises", requireDatabase, async (req, res) => {
   try {
     const result = await db.select().from(exercises);
     const exerciseList = result.map((e) => ({
@@ -361,12 +411,12 @@ app.get("/api/exercises", async (req, res) => {
     res.json(exerciseList);
   } catch (error) {
     console.error("Exercises fetch error:", error);
-    res.status(500).json({ message: "Failed to fetch exercises" });
+    res.status(500).json({ message: "Failed to fetch exercises", error: error.message });
   }
 });
 
 // Foods endpoint
-app.get("/api/foods", async (req, res) => {
+app.get("/api/foods", requireDatabase, async (req, res) => {
   try {
     const result = await db.select().from(foods);
     const foodList = result.map((f) => ({
@@ -382,12 +432,12 @@ app.get("/api/foods", async (req, res) => {
     res.json(foodList);
   } catch (error) {
     console.error("Foods fetch error:", error);
-    res.status(500).json({ message: "Failed to fetch foods" });
+    res.status(500).json({ message: "Failed to fetch foods", error: error.message });
   }
 });
 
 // Heart tips endpoint
-app.get("/api/heart-tips", async (req, res) => {
+app.get("/api/heart-tips", requireDatabase, async (req, res) => {
   try {
     const result = await db.select().from(heartTips);
     const tipsList = result.map((t) => ({
@@ -400,12 +450,12 @@ app.get("/api/heart-tips", async (req, res) => {
     res.json(tipsList);
   } catch (error) {
     console.error("Heart tips fetch error:", error);
-    res.status(500).json({ message: "Failed to fetch heart tips" });
+    res.status(500).json({ message: "Failed to fetch heart tips", error: error.message });
   }
 });
 
 // Heart rate references endpoint
-app.get("/api/heart-rate-references", async (req, res) => {
+app.get("/api/heart-rate-references", (req, res) => {
   const references = [
     {
       ageGroup: "Newborns (0-1 month)",
@@ -516,7 +566,7 @@ app.get("/api/heart-rate-references", async (req, res) => {
 });
 
 // Walking recommendation endpoint
-app.get("/api/walking-recommendation", async (req, res) => {
+app.get("/api/walking-recommendation", requireDatabase, async (req, res) => {
   try {
     const result = await db.select().from(userProfiles).limit(1);
 
@@ -594,7 +644,7 @@ app.get("/api/walking-recommendation", async (req, res) => {
     res.json(recommendation);
   } catch (error) {
     console.error("Walking recommendation error:", error);
-    res.status(500).json({ message: "Failed to generate walking recommendation" });
+    res.status(500).json({ message: "Failed to generate walking recommendation", error: error.message });
   }
 });
 
