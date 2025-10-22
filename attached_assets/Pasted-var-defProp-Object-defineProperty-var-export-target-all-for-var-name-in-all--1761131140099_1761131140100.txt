@@ -1,0 +1,861 @@
+var __defProp = Object.defineProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
+// server/index.ts
+import express2 from "express";
+
+// server/routes.ts
+import { createServer } from "http";
+
+// server/db/index.ts
+import { drizzle } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
+
+// server/db/schema.ts
+var schema_exports = {};
+__export(schema_exports, {
+  exercises: () => exercises,
+  foods: () => foods,
+  healthMetrics: () => healthMetrics,
+  heartTips: () => heartTips,
+  userProfiles: () => userProfiles
+});
+
+// shared/schema.ts
+import { z } from "zod";
+import { pgTable, serial, varchar, integer, timestamp, real, text } from "drizzle-orm/pg-core";
+var userProfileSchema = z.object({
+  height: z.number().positive(),
+  // in cm
+  weight: z.number().positive(),
+  // in kg
+  age: z.number().int().positive(),
+  gender: z.enum(["male", "female", "other"])
+});
+var healthMetricsSchema = z.object({
+  steps: z.number().int().nonnegative(),
+  heartRate: z.number().int().positive(),
+  // beats per minute
+  systolicBP: z.number().int().positive().optional(),
+  // blood pressure
+  diastolicBP: z.number().int().positive().optional(),
+  date: z.string()
+  // ISO date string
+});
+var bmiResultSchema = z.object({
+  bmi: z.number(),
+  category: z.enum(["underweight", "normal", "overweight", "obese"]),
+  recommendation: z.string()
+});
+var exerciseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: z.enum(["cardio", "strength", "flexibility", "balance"]),
+  description: z.string(),
+  benefits: z.array(z.string()),
+  duration: z.string(),
+  // e.g., "30 minutes"
+  intensity: z.enum(["low", "moderate", "high"]),
+  heartHealthRating: z.number().min(1).max(5),
+  // 1-5 stars
+  caloriesBurned: z.number().optional()
+});
+var foodSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: z.enum(["fruits", "vegetables", "proteins", "grains", "dairy", "nuts"]),
+  description: z.string(),
+  benefits: z.array(z.string()),
+  calories: z.number(),
+  nutrients: z.object({
+    protein: z.string(),
+    fiber: z.string(),
+    vitamins: z.array(z.string())
+  }),
+  heartHealthy: z.boolean()
+});
+var heartRateReferenceSchema = z.object({
+  ageGroup: z.string(),
+  restingMin: z.number(),
+  restingMax: z.number(),
+  maxHeartRate: z.number(),
+  moderateMin: z.number(),
+  moderateMax: z.number()
+});
+var walkingRecommendationSchema = z.object({
+  dailySteps: z.number(),
+  duration: z.string(),
+  intensity: z.string(),
+  tips: z.array(z.string())
+});
+var heartPatientTipSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  category: z.enum(["walking", "exercise", "diet", "monitoring", "lifestyle"]),
+  importance: z.enum(["critical", "important", "helpful"])
+});
+var insertHealthMetricsSchema = healthMetricsSchema.omit({ date: true });
+var userProfiles = pgTable("user_profiles", {
+  id: serial("id").primaryKey(),
+  height: real("height").notNull(),
+  weight: real("weight").notNull(),
+  age: integer("age").notNull(),
+  gender: varchar("gender", { length: 10 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+var healthMetrics = pgTable("health_metrics", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => userProfiles.id),
+  steps: integer("steps").notNull().default(0),
+  heartRate: integer("heart_rate").notNull(),
+  systolicBP: integer("systolic_bp"),
+  diastolicBP: integer("diastolic_bp"),
+  date: timestamp("date").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull()
+});
+var exercises = pgTable("exercises", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  description: text("description").notNull(),
+  benefits: text("benefits").notNull(),
+  // Store as JSON string
+  duration: varchar("duration", { length: 50 }).notNull(),
+  intensity: varchar("intensity", { length: 20 }).notNull(),
+  heartHealthRating: integer("heart_health_rating").notNull(),
+  caloriesBurned: integer("calories_burned")
+});
+var foods = pgTable("foods", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  description: text("description").notNull(),
+  benefits: text("benefits").notNull(),
+  // Store as JSON string
+  calories: integer("calories").notNull(),
+  nutrients: text("nutrients").notNull(),
+  // Store as JSON string
+  heartHealthy: integer("heart_healthy").notNull()
+  // 0 or 1 for boolean
+});
+var heartTips = pgTable("heart_tips", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  importance: varchar("importance", { length: 20 }).notNull()
+});
+
+// server/db/index.ts
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not set");
+}
+var sql = neon(process.env.DATABASE_URL);
+var db = drizzle(sql, { schema: schema_exports });
+
+// server/db-storage.ts
+import { eq, desc } from "drizzle-orm";
+var DatabaseStorage = class {
+  heartRateReferences;
+  constructor() {
+    this.heartRateReferences = [
+      {
+        ageGroup: "Newborns (0-1 month)",
+        restingMin: 70,
+        restingMax: 190,
+        maxHeartRate: 220,
+        moderateMin: 110,
+        moderateMax: 154
+      },
+      {
+        ageGroup: "Infants (1-11 months)",
+        restingMin: 80,
+        restingMax: 160,
+        maxHeartRate: 220,
+        moderateMin: 110,
+        moderateMax: 154
+      },
+      {
+        ageGroup: "Children (1-2 years)",
+        restingMin: 80,
+        restingMax: 130,
+        maxHeartRate: 215,
+        moderateMin: 108,
+        moderateMax: 151
+      },
+      {
+        ageGroup: "Children (3-4 years)",
+        restingMin: 80,
+        restingMax: 120,
+        maxHeartRate: 210,
+        moderateMin: 105,
+        moderateMax: 147
+      },
+      {
+        ageGroup: "Children (5-6 years)",
+        restingMin: 75,
+        restingMax: 115,
+        maxHeartRate: 205,
+        moderateMin: 103,
+        moderateMax: 144
+      },
+      {
+        ageGroup: "Children (7-9 years)",
+        restingMin: 70,
+        restingMax: 110,
+        maxHeartRate: 200,
+        moderateMin: 100,
+        moderateMax: 140
+      },
+      {
+        ageGroup: "Children (10-15 years)",
+        restingMin: 60,
+        restingMax: 100,
+        maxHeartRate: 195,
+        moderateMin: 98,
+        moderateMax: 137
+      },
+      {
+        ageGroup: "Adults (18-25 years)",
+        restingMin: 60,
+        restingMax: 100,
+        maxHeartRate: 195,
+        moderateMin: 98,
+        moderateMax: 137
+      },
+      {
+        ageGroup: "Adults (26-35 years)",
+        restingMin: 60,
+        restingMax: 100,
+        maxHeartRate: 190,
+        moderateMin: 95,
+        moderateMax: 133
+      },
+      {
+        ageGroup: "Adults (36-45 years)",
+        restingMin: 60,
+        restingMax: 100,
+        maxHeartRate: 185,
+        moderateMin: 93,
+        moderateMax: 130
+      },
+      {
+        ageGroup: "Adults (46-55 years)",
+        restingMin: 60,
+        restingMax: 100,
+        maxHeartRate: 175,
+        moderateMin: 88,
+        moderateMax: 123
+      },
+      {
+        ageGroup: "Adults (56-65 years)",
+        restingMin: 60,
+        restingMax: 100,
+        maxHeartRate: 165,
+        moderateMin: 83,
+        moderateMax: 116
+      },
+      {
+        ageGroup: "Seniors (65+ years)",
+        restingMin: 60,
+        restingMax: 100,
+        maxHeartRate: 155,
+        moderateMin: 78,
+        moderateMax: 109
+      }
+    ];
+  }
+  async getProfile() {
+    const result = await db.select().from(userProfiles).limit(1);
+    if (result.length === 0) return void 0;
+    const profile = result[0];
+    return {
+      height: profile.height,
+      weight: profile.weight,
+      age: profile.age,
+      gender: profile.gender
+    };
+  }
+  async updateProfile(profile) {
+    const existing = await db.select().from(userProfiles).limit(1);
+    if (existing.length === 0) {
+      await db.insert(userProfiles).values({
+        height: profile.height,
+        weight: profile.weight,
+        age: profile.age,
+        gender: profile.gender
+      });
+    } else {
+      await db.update(userProfiles).set({
+        height: profile.height,
+        weight: profile.weight,
+        age: profile.age,
+        gender: profile.gender,
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq(userProfiles.id, existing[0].id));
+    }
+    return profile;
+  }
+  async getTodayMetrics() {
+    const today = /* @__PURE__ */ new Date();
+    today.setHours(0, 0, 0, 0);
+    const result = await db.select().from(healthMetrics).orderBy(desc(healthMetrics.date)).limit(1);
+    if (result.length === 0) {
+      const defaultMetrics = {
+        steps: 0,
+        heartRate: 72,
+        systolicBP: 120,
+        diastolicBP: 80,
+        date: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      const profile = await db.select().from(userProfiles).limit(1);
+      if (profile.length > 0) {
+        await db.insert(healthMetrics).values({
+          userId: profile[0].id,
+          steps: 0,
+          heartRate: 72,
+          systolicBP: 120,
+          diastolicBP: 80
+        });
+      }
+      return defaultMetrics;
+    }
+    const metric = result[0];
+    return {
+      steps: metric.steps,
+      heartRate: metric.heartRate,
+      systolicBP: metric.systolicBP || void 0,
+      diastolicBP: metric.diastolicBP || void 0,
+      date: metric.date.toISOString()
+    };
+  }
+  async updateSteps(steps) {
+    const profile = await this.ensureProfile();
+    const latestMetric = await db.select().from(healthMetrics).orderBy(desc(healthMetrics.date)).limit(1);
+    if (latestMetric.length > 0) {
+      await db.update(healthMetrics).set({ steps, date: /* @__PURE__ */ new Date() }).where(eq(healthMetrics.id, latestMetric[0].id));
+      return {
+        steps,
+        heartRate: latestMetric[0].heartRate,
+        systolicBP: latestMetric[0].systolicBP || void 0,
+        diastolicBP: latestMetric[0].diastolicBP || void 0,
+        date: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    } else {
+      await db.insert(healthMetrics).values({
+        userId: profile.id,
+        steps,
+        heartRate: 72,
+        systolicBP: 120,
+        diastolicBP: 80
+      });
+      return {
+        steps,
+        heartRate: 72,
+        systolicBP: 120,
+        diastolicBP: 80,
+        date: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+  }
+  async updateHeartRate(heartRate) {
+    const profile = await this.ensureProfile();
+    const latestMetric = await db.select().from(healthMetrics).orderBy(desc(healthMetrics.date)).limit(1);
+    if (latestMetric.length > 0) {
+      await db.update(healthMetrics).set({ heartRate, date: /* @__PURE__ */ new Date() }).where(eq(healthMetrics.id, latestMetric[0].id));
+      return {
+        steps: latestMetric[0].steps,
+        heartRate,
+        systolicBP: latestMetric[0].systolicBP || void 0,
+        diastolicBP: latestMetric[0].diastolicBP || void 0,
+        date: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    } else {
+      await db.insert(healthMetrics).values({
+        userId: profile.id,
+        steps: 0,
+        heartRate,
+        systolicBP: 120,
+        diastolicBP: 80
+      });
+      return {
+        steps: 0,
+        heartRate,
+        systolicBP: 120,
+        diastolicBP: 80,
+        date: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+  }
+  async updateBloodPressure(systolic, diastolic) {
+    const profile = await this.ensureProfile();
+    const latestMetric = await db.select().from(healthMetrics).orderBy(desc(healthMetrics.date)).limit(1);
+    if (latestMetric.length > 0) {
+      await db.update(healthMetrics).set({ systolicBP: systolic, diastolicBP: diastolic, date: /* @__PURE__ */ new Date() }).where(eq(healthMetrics.id, latestMetric[0].id));
+      return {
+        steps: latestMetric[0].steps,
+        heartRate: latestMetric[0].heartRate,
+        systolicBP: systolic,
+        diastolicBP: diastolic,
+        date: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    } else {
+      await db.insert(healthMetrics).values({
+        userId: profile.id,
+        steps: 0,
+        heartRate: 72,
+        systolicBP: systolic,
+        diastolicBP: diastolic
+      });
+      return {
+        steps: 0,
+        heartRate: 72,
+        systolicBP: systolic,
+        diastolicBP: diastolic,
+        date: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+  }
+  async getAllExercises() {
+    const result = await db.select().from(exercises);
+    return result.map((e) => ({
+      id: e.id.toString(),
+      name: e.name,
+      category: e.category,
+      description: e.description,
+      benefits: JSON.parse(e.benefits),
+      duration: e.duration,
+      intensity: e.intensity,
+      heartHealthRating: e.heartHealthRating,
+      caloriesBurned: e.caloriesBurned || void 0
+    }));
+  }
+  async getAllFoods() {
+    const result = await db.select().from(foods);
+    return result.map((f) => ({
+      id: f.id.toString(),
+      name: f.name,
+      category: f.category,
+      description: f.description,
+      benefits: JSON.parse(f.benefits),
+      calories: f.calories,
+      nutrients: JSON.parse(f.nutrients),
+      heartHealthy: f.heartHealthy === 1
+    }));
+  }
+  async getAllHeartTips() {
+    const result = await db.select().from(heartTips);
+    return result.map((t) => ({
+      id: t.id.toString(),
+      title: t.title,
+      description: t.description,
+      category: t.category,
+      importance: t.importance
+    }));
+  }
+  async getHeartRateReferences() {
+    return this.heartRateReferences;
+  }
+  async ensureProfile() {
+    const profile = await db.select().from(userProfiles).limit(1);
+    if (profile.length === 0) {
+      const result = await db.insert(userProfiles).values({
+        height: 170,
+        weight: 70,
+        age: 30,
+        gender: "other"
+      }).returning();
+      return result[0];
+    }
+    return profile[0];
+  }
+};
+var dbStorage = new DatabaseStorage();
+
+// server/routes.ts
+async function registerRoutes(app2) {
+  app2.get("/api/profile", async (req, res) => {
+    try {
+      const profile = await dbStorage.getProfile();
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+      res.json(profile);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+  app2.post("/api/profile", async (req, res) => {
+    try {
+      const existingProfile = await dbStorage.getProfile();
+      const profileData = {
+        height: req.body.height ?? existingProfile?.height ?? 170,
+        weight: req.body.weight ?? existingProfile?.weight ?? 70,
+        age: req.body.age ?? existingProfile?.age ?? 30,
+        gender: req.body.gender ?? existingProfile?.gender ?? "other"
+      };
+      const validatedData = userProfileSchema.parse(profileData);
+      const profile = await dbStorage.updateProfile(validatedData);
+      res.json(profile);
+    } catch (error) {
+      console.error("Profile update error:", error);
+      res.status(400).json({
+        message: "Invalid profile data",
+        details: error.message
+      });
+    }
+  });
+  app2.get("/api/bmi", async (req, res) => {
+    try {
+      const profile = await dbStorage.getProfile();
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found. Please enter your height and weight." });
+      }
+      const heightInMeters = profile.height / 100;
+      const bmi = profile.weight / (heightInMeters * heightInMeters);
+      let category;
+      let recommendation;
+      if (bmi < 18.5) {
+        category = "underweight";
+        recommendation = "You may be underweight. Consider consulting a healthcare provider or nutritionist to develop a healthy weight gain plan with nutrient-rich foods and appropriate exercise.";
+      } else if (bmi < 25) {
+        category = "normal";
+        recommendation = "You're at a healthy weight! Maintain it through a balanced diet rich in fruits, vegetables, whole grains, and regular physical activity (150 minutes of moderate exercise weekly).";
+      } else if (bmi < 30) {
+        category = "overweight";
+        recommendation = "You're in the overweight range. Focus on portion control, increase physical activity to 200-300 minutes weekly, and choose whole foods over processed options. Small, sustainable changes work best.";
+      } else {
+        category = "obese";
+        recommendation = "Your BMI indicates obesity, which increases health risks. Consult with healthcare professionals for a comprehensive plan including nutrition counseling, structured exercise, and possibly medical support. Aim for gradual, sustainable weight loss of 1-2 pounds per week.";
+      }
+      res.json({ bmi, category, recommendation });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to calculate BMI" });
+    }
+  });
+  app2.get("/api/health-metrics/today", async (req, res) => {
+    try {
+      const metrics = await dbStorage.getTodayMetrics();
+      res.json(metrics);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch health metrics" });
+    }
+  });
+  app2.post("/api/health-metrics/steps", async (req, res) => {
+    try {
+      const { steps } = req.body;
+      if (typeof steps !== "number" || steps < 0) {
+        return res.status(400).json({ message: "Invalid steps value" });
+      }
+      const metrics = await dbStorage.updateSteps(steps);
+      res.json(metrics);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update steps" });
+    }
+  });
+  app2.post("/api/health-metrics/heart-rate", async (req, res) => {
+    try {
+      const { heartRate } = req.body;
+      if (typeof heartRate !== "number" || heartRate < 30 || heartRate > 250) {
+        return res.status(400).json({ message: "Invalid heart rate value" });
+      }
+      const metrics = await dbStorage.updateHeartRate(heartRate);
+      res.json(metrics);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update heart rate" });
+    }
+  });
+  app2.post("/api/health-metrics/blood-pressure", async (req, res) => {
+    try {
+      const { systolic, diastolic } = req.body;
+      if (typeof systolic !== "number" || typeof diastolic !== "number" || systolic < 70 || systolic > 200 || diastolic < 40 || diastolic > 130 || diastolic >= systolic) {
+        return res.status(400).json({ message: "Invalid blood pressure values" });
+      }
+      const metrics = await dbStorage.updateBloodPressure(systolic, diastolic);
+      res.json(metrics);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update blood pressure" });
+    }
+  });
+  app2.get("/api/exercises", async (req, res) => {
+    try {
+      const exercises2 = await dbStorage.getAllExercises();
+      res.json(exercises2);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch exercises" });
+    }
+  });
+  app2.get("/api/foods", async (req, res) => {
+    try {
+      const foods2 = await dbStorage.getAllFoods();
+      res.json(foods2);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch foods" });
+    }
+  });
+  app2.get("/api/heart-tips", async (req, res) => {
+    try {
+      const tips = await dbStorage.getAllHeartTips();
+      res.json(tips);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch heart tips" });
+    }
+  });
+  app2.get("/api/heart-rate-references", async (req, res) => {
+    try {
+      const references = await dbStorage.getHeartRateReferences();
+      res.json(references);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch heart rate references" });
+    }
+  });
+  app2.get("/api/walking-recommendation", async (req, res) => {
+    try {
+      const profile = await dbStorage.getProfile();
+      const metrics = await dbStorage.getTodayMetrics();
+      let recommendation;
+      if (!profile) {
+        recommendation = {
+          dailySteps: 1e4,
+          duration: "30-45 minutes",
+          intensity: "Moderate pace",
+          tips: [
+            "Start with 5-10 minutes if you're new to walking",
+            "Walk at a pace where you can talk but not sing",
+            "Gradually increase your duration each week",
+            "Stay hydrated before, during, and after walking"
+          ]
+        };
+      } else {
+        const heightInMeters = profile.height / 100;
+        const bmi = profile.weight / (heightInMeters * heightInMeters);
+        if (bmi < 18.5) {
+          recommendation = {
+            dailySteps: 7e3,
+            duration: "20-30 minutes",
+            intensity: "Light to moderate",
+            tips: [
+              "Focus on building strength alongside walking",
+              "Ensure adequate nutrition to support activity",
+              "Don't overexert - rest is important for recovery",
+              "Consider resistance training 2-3 times per week"
+            ]
+          };
+        } else if (bmi < 25) {
+          recommendation = {
+            dailySteps: 1e4,
+            duration: "30-45 minutes",
+            intensity: "Moderate pace",
+            tips: [
+              "Maintain your healthy habits",
+              "Vary your routes to keep it interesting",
+              "Try interval walking for extra benefits",
+              "Include some hills for added challenge"
+            ]
+          };
+        } else if (bmi < 30) {
+          recommendation = {
+            dailySteps: 12e3,
+            duration: "45-60 minutes",
+            intensity: "Moderate to brisk",
+            tips: [
+              "Break walks into 2-3 sessions if needed",
+              "Focus on consistency over intensity",
+              "Combine with dietary changes for best results",
+              "Track your progress to stay motivated"
+            ]
+          };
+        } else {
+          recommendation = {
+            dailySteps: 8e3,
+            duration: "30-40 minutes",
+            intensity: "Start slow, build gradually",
+            tips: [
+              "Begin with 10-minute walks, 3 times daily",
+              "Choose comfortable, supportive shoes",
+              "Walk on flat, even surfaces initially",
+              "Consult your doctor before starting",
+              "Listen to your body and rest when needed"
+            ]
+          };
+        }
+      }
+      res.json(recommendation);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to generate walking recommendation" });
+    }
+  });
+  const httpServer = createServer(app2);
+  return httpServer;
+}
+
+// server/vite.ts
+import express from "express";
+import fs from "fs";
+import path2 from "path";
+import { createServer as createViteServer, createLogger } from "vite";
+
+// vite.config.ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import path from "path";
+import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+var vite_config_default = defineConfig({
+  plugins: [
+    react(),
+    runtimeErrorOverlay(),
+    ...process.env.NODE_ENV !== "production" && process.env.REPL_ID !== void 0 ? [
+      await import("@replit/vite-plugin-cartographer").then(
+        (m) => m.cartographer()
+      ),
+      await import("@replit/vite-plugin-dev-banner").then(
+        (m) => m.devBanner()
+      )
+    ] : []
+  ],
+  resolve: {
+    alias: {
+      "@": path.resolve(import.meta.dirname, "client", "src"),
+      "@shared": path.resolve(import.meta.dirname, "shared"),
+      "@assets": path.resolve(import.meta.dirname, "attached_assets")
+    }
+  },
+  root: path.resolve(import.meta.dirname, "client"),
+  build: {
+    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    emptyOutDir: true
+  },
+  server: {
+    fs: {
+      strict: true,
+      deny: ["**/.*"]
+    }
+  }
+});
+
+// server/vite.ts
+import { nanoid } from "nanoid";
+var viteLogger = createLogger();
+function log(message, source = "express") {
+  const formattedTime = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  });
+  console.log(`${formattedTime} [${source}] ${message}`);
+}
+async function setupVite(app2, server) {
+  const serverOptions = {
+    middlewareMode: true,
+    hmr: { server },
+    allowedHosts: true
+  };
+  const vite = await createViteServer({
+    ...vite_config_default,
+    configFile: false,
+    customLogger: {
+      ...viteLogger,
+      error: (msg, options) => {
+        viteLogger.error(msg, options);
+        process.exit(1);
+      }
+    },
+    server: serverOptions,
+    appType: "custom"
+  });
+  app2.use(vite.middlewares);
+  app2.use("*", async (req, res, next) => {
+    const url = req.originalUrl;
+    try {
+      const clientTemplate = path2.resolve(
+        import.meta.dirname,
+        "..",
+        "client",
+        "index.html"
+      );
+      let template = await fs.promises.readFile(clientTemplate, "utf-8");
+      template = template.replace(
+        `src="/src/main.tsx"`,
+        `src="/src/main.tsx?v=${nanoid()}"`
+      );
+      const page = await vite.transformIndexHtml(url, template);
+      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+    } catch (e) {
+      vite.ssrFixStacktrace(e);
+      next(e);
+    }
+  });
+}
+function serveStatic(app2) {
+  const distPath = path2.resolve(import.meta.dirname, "public");
+  if (!fs.existsSync(distPath)) {
+    throw new Error(
+      `Could not find the build directory: ${distPath}, make sure to build the client first`
+    );
+  }
+  app2.use(express.static(distPath));
+  app2.use("*", (_req, res) => {
+    res.sendFile(path2.resolve(distPath, "index.html"));
+  });
+}
+
+// server/index.ts
+var app = express2();
+app.use(express2.json({
+  verify: (req, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
+app.use(express2.urlencoded({ extended: false }));
+app.use((req, res, next) => {
+  const start = Date.now();
+  const path3 = req.path;
+  let capturedJsonResponse = void 0;
+  const originalResJson = res.json;
+  res.json = function(bodyJson, ...args) {
+    capturedJsonResponse = bodyJson;
+    return originalResJson.apply(res, [bodyJson, ...args]);
+  };
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (path3.startsWith("/api")) {
+      let logLine = `${req.method} ${path3} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "\u2026";
+      }
+      log(logLine);
+    }
+  });
+  next();
+});
+(async () => {
+  const server = await registerRoutes(app);
+  app.use((err, _req, res, _next) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+    res.status(status).json({ message });
+    throw err;
+  });
+  if (app.get("env") === "development") {
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
+  }
+  const port = parseInt(process.env.PORT || "5000", 10);
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true
+  }, () => {
+    log(`serving on port ${port}`);
+  });
+})();
