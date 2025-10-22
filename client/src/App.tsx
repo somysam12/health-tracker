@@ -51,7 +51,7 @@ function App() {
                   <div className="flex items-center gap-4">
                     <SidebarTrigger data-testid="button-sidebar-toggle" />
                     <span className="text-sm text-muted-foreground" data-testid="text-credit-top">
-                      made with ❤️ by Shashwat
+                      Co-Founder: Neeraj Kumar Yadav | Publisher: Shashwat
                     </span>
                   </div>
                   <ThemeToggle />
@@ -63,7 +63,7 @@ function App() {
                 </main>
                 <footer className="border-t bg-background p-4 text-center">
                   <p className="text-sm text-muted-foreground" data-testid="text-credit-bottom">
-                    made with ❤️ by Shashwat
+                    AiSmartWatch by Trio | Co-Founder: Neeraj Kumar Yadav | Publisher: Shashwat
                   </p>
                 </footer>
               </div>

@@ -83,8 +83,8 @@ export function AppSidebar() {
             <Heart className="h-6 w-6 text-primary-foreground" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Health Monitor</h2>
-            <p className="text-xs text-muted-foreground">Track your wellness</p>
+            <h2 className="text-lg font-semibold">AiSmartWatch</h2>
+            <p className="text-xs text-muted-foreground">by Trio</p>
           </div>
         </div>
       </SidebarHeader>
