@@ -716,5 +716,6 @@ app.get("/api/walking-recommendation", requireDatabase, async (req, res) => {
   }
 });
 
-// Export for Vercel serverless
+// Export for Vercel serverless - Vercel needs the app as default export
+// This allows Vercel to handle the Express app as a serverless function
 export default app;
