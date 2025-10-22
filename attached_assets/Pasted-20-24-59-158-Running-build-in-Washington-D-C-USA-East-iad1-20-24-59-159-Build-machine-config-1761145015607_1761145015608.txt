@@ -1,0 +1,68 @@
+20:24:59.158 Running build in Washington, D.C., USA (East) – iad1
+20:24:59.159 Build machine configuration: 2 cores, 8 GB
+20:24:59.175 Cloning github.com/somysam12/health-tracker (Branch: main, Commit: b8d694a)
+20:25:00.101 Cloning completed: 926.000ms
+20:25:00.266 Restored build cache from previous deployment (B39B2ojfa9qkemdinCky2kEnXuan)
+20:25:00.752 Running "vercel build"
+20:25:01.117 Vercel CLI 48.2.9
+20:25:01.778 Running "install" command: `npm install`...
+20:25:04.349 
+20:25:04.349 added 1 package, and audited 480 packages in 2s
+20:25:04.350 
+20:25:04.350 65 packages are looking for funding
+20:25:04.350   run `npm fund` for details
+20:25:04.376 
+20:25:04.377 8 vulnerabilities (3 low, 5 moderate)
+20:25:04.377 
+20:25:04.377 To address issues that do not require attention, run:
+20:25:04.378   npm audit fix
+20:25:04.378 
+20:25:04.378 To address all issues (including breaking changes), run:
+20:25:04.378   npm audit fix --force
+20:25:04.378 
+20:25:04.379 Run `npm audit` for details.
+20:25:04.622 
+20:25:04.624 > rest-express@1.0.0 vercel-build
+20:25:04.624 > vite build
+20:25:04.624 
+20:25:04.902 [36mvite v5.4.20 [32mbuilding for production...[36m[39m
+20:25:04.954 transforming...
+20:25:06.224 
+20:25:06.225 A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+20:25:09.109 [32m✓[39m 1724 modules transformed.
+20:25:09.376 rendering chunks...
+20:25:09.384 computing gzip size...
+20:25:09.400 [2m../dist/public/[22m[32mindex.html                 [39m[1m[2m  2.78 kB[22m[1m[22m[2m │ gzip:   1.06 kB[22m
+20:25:09.400 [2m../dist/public/[22m[2massets/[22m[35mindex-BrxcsVVr.css  [39m[1m[2m 73.28 kB[22m[1m[22m[2m │ gzip:  11.83 kB[22m
+20:25:09.400 [2m../dist/public/[22m[2massets/[22m[36mindex-Qnygw3xc.js   [39m[1m[2m372.36 kB[22m[1m[22m[2m │ gzip: 112.01 kB[22m
+20:25:09.403 [32m✓ built in 4.47s[39m
+20:25:09.501 Installing dependencies...
+20:25:10.257 
+20:25:10.258 up to date in 701ms
+20:25:10.258 
+20:25:10.259 65 packages are looking for funding
+20:25:10.259   run `npm fund` for details
+20:25:10.269 Running "npm run vercel-build"
+20:25:10.373 
+20:25:10.373 > rest-express@1.0.0 vercel-build
+20:25:10.375 > vite build
+20:25:10.375 
+20:25:10.602 [36mvite v5.4.20 [32mbuilding for production...[36m[39m
+20:25:10.650 transforming...
+20:25:11.773 
+20:25:11.773 A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+20:25:14.538 [32m✓[39m 1724 modules transformed.
+20:25:14.785 rendering chunks...
+20:25:14.792 computing gzip size...
+20:25:14.806 [2m../dist/public/[22m[32mindex.html                 [39m[1m[2m  2.78 kB[22m[1m[22m[2m │ gzip:   1.06 kB[22m
+20:25:14.806 [2m../dist/public/[22m[2massets/[22m[35mindex-BrxcsVVr.css  [39m[1m[2m 73.28 kB[22m[1m[22m[2m │ gzip:  11.83 kB[22m
+20:25:14.809 [2m../dist/public/[22m[2massets/[22m[36mindex-Qnygw3xc.js   [39m[1m[2m372.36 kB[22m[1m[22m[2m │ gzip: 112.01 kB[22m
+20:25:14.809 [32m✓ built in 4.18s[39m
+20:25:15.117 Using TypeScript 5.6.3 (local user-provided)
+20:25:21.501 Build Completed in /vercel/output [20s]
+20:25:21.679 Deploying outputs...
+20:25:28.536 Deployment completed
+20:25:29.340 Creating build cache...
+20:25:45.736 Created build cache: 16.396s
+20:25:45.737 Uploading build cache [77.61 MB]
+20:25:47.939 Build cache uploaded: 2.202s
